@@ -56,6 +56,8 @@ class DataInterface():
         X_features = df.columns[df.columns != target_feature]
         self._df_y = df[self._target_feature]
         self._df_X = df[X_features]
+        self._df_y_init = self._df_y.copy()
+        self._df_X_init = self._df_X.copy()
     
     def split_data(self, test_size : float = 0.3) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]:
         """
@@ -120,6 +122,12 @@ class DataInterface():
         Simple way to return the data.
         """
         return pd.concat[self._df_X, self._df_y]
+    
+    def get_init_data(self):
+        """
+        Simple way to return the data from before any changes to it.
+        """
+        return pd.concat[self._df_X_init, self._df_y_init]
 
     @property
     def categorical_features(self) -> Sequence[str]:
