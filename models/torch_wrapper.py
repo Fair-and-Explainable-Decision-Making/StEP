@@ -24,7 +24,7 @@ class TorchModel:
     def fit(self, xtrain, ytrain):
         self._xtrain = xtrain
         self._ytrain = ytrain
-        if self._model_type == "logictic regression":
+        if self._model_type == "logreg":
             self._model = logreg.LogisticRegression(xtrain.shape[1])
         elif self._model_type == "dnn":
             self._model = dnn_basic.DNN(xtrain.shape[1])

@@ -34,9 +34,8 @@ class ModelInterface():
         elif isinstance(self._model, TorchModel):
             return pred
 
-    @property
-    def model_backend(self) -> str:
-        return self._model_backend
+    def get_model(self) -> str:
+        return self._model
     
 if __name__ == "__main__":
     X = np.random.random((1000, 3))
@@ -48,6 +47,22 @@ if __name__ == "__main__":
     Y = np.array(y >= 0.5, dtype=np.int32).reshape(-1,1)
     print(Y[:10])
     model = TorchModel(model_type="dnn",batch_size=1)
+    mi = ModelInterface(model)
+    mi.fit(XZ,Y)
+    print("DNN")
+    print(mi.predict(XZ)[:10])
+    print(mi.predict_proba(XZ)[:10])
+    print()
+
+    model = TorchModel(model_type="logreg",batch_size=1)
+    mi = ModelInterface(model)
+    mi.fit(XZ,Y)
+    print("Log Reg PyTorch")
+    print(mi.predict(XZ)[:10])
+    print(mi.predict_proba(XZ)[:10])
+    print()
+
+    print("Log Reg Sklearn")
     model = LogisticRegression()
     mi = ModelInterface(model)
     mi.fit(XZ,Y)

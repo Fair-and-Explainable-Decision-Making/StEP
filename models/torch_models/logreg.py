@@ -11,7 +11,7 @@ class LogisticRegression(nn.Module):
     Args:
         input_dim: num of features of the dataset that will be passed in
     """
-    def __init__(self, input_dim, n_classes):
+    def __init__(self, input_dim, n_classes=1):
         super(LogisticRegression, self).__init__()
         self.linear = nn.Linear(input_dim, n_classes)
 
