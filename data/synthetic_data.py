@@ -10,9 +10,9 @@ def col_names_synthetic(s: str, num_feat: int) -> List[str]:
     """
     return [s+str(i) for i in range(1,num_feat+1)]
 
-def create_synthetic_data(n_samples : int, num_con_feat : int = 3, num_ord_cat_feat : int = 1, 
-                        ord_cat_num_unique : int = 6, num_binary_cat_feat : int = 1, 
-                        w : List[float] = [1.0, -1.0, 1.0, 1.0, -1.0]) -> pd.DataFrame:
+def create_synthetic_data(n_samples: int, num_con_feat: int = 3, num_ord_cat_feat: int = 1, 
+                        ord_cat_num_unique: int = 6, num_binary_cat_feat: int = 1, 
+                        w: List[float] = [1.0, -1.0, 1.0, 1.0, -1.0]) -> pd.DataFrame:
     """
     Creates a sythetic dataset with specified number of samples, continuous features,
     ordinal features, and categorical features.
@@ -66,10 +66,13 @@ def create_synthetic_data(n_samples : int, num_con_feat : int = 3, num_ord_cat_f
     Z_cols = col_names_synthetic('Z', num_binary_cat_feat)
     O_cols = col_names_synthetic('O', num_ord_cat_feat)
     XZOY_df = pd.DataFrame(XZOY_char, columns=X_cols+Z_cols+O_cols+['Y'])
-    
+    XZOY_df = XZOY_df.astype({'Y': int})
+    for i in range(1,num_con_feat+1):
+        XZOY_df = XZOY_df.astype({'X'+str(i): float})
     return XZOY_df
 
 
 if __name__ == "__main__":
     df = create_synthetic_data(1000)
     print(df.head(10))
+    print(df.dtypes)

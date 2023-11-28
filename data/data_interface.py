@@ -5,12 +5,12 @@ import pathlib
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from synthetic_data import create_synthetic_data
-import numpy as np
 
 class DataInterface():
-    def __init__(self, data : pd.DataFrame, file_path : str, continuous_features : Sequence[str],
-                ordinal_features : Sequence[str], categorical_features : Sequence[str], immutable_features : Sequence[str],
-                target_feature : str, target_mapping : Any = None, scaling_method : str = "MinMax", encoding_method : str = "OneHot"):
+    def __init__(self, data: pd.DataFrame, file_path: str, continuous_features: Sequence[str],
+                ordinal_features: Sequence[str], categorical_features: Sequence[str], immutable_features: Sequence[str],
+                target_feature: str, target_mapping: Any = None, scaling_method: str = "MinMax", encoding_method: str = "OneHot",
+                pos_label: int = 1):
         """
         Creates a data interface with the specified, continuous features, ordinal features, and categorical features.
 
@@ -47,9 +47,9 @@ class DataInterface():
         self._target_mapping = target_mapping
         self._scaling_method = scaling_method
         self._encoding_method = encoding_method
-        if (file_path is None or file_path is "") and isinstance(data, pd.DataFrame):
+        if (file_path is None or file_path == "") and isinstance(data, pd.DataFrame):
             df = data
-        elif file_path is not None and file_path is not "":
+        elif file_path is not None and file_path != "":
             df = pd.read_csv(file_path)
         else:
             raise Exception("No data and file path provided")
@@ -58,8 +58,13 @@ class DataInterface():
         self._df_X = df[X_features]
         self._df_y_init = self._df_y.copy()
         self._df_X_init = self._df_X.copy()
+        self._X_train = None
+        self._X_test = None
+        self._y_train = None
+        self._y_test = None
+        self._pos_label = pos_label
     
-    def split_data(self, test_size : float = 0.3) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]:
+    def split_data(self, test_size: float = 0.3) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]:
         """
         Splits data into X and y and train and test data. Should be used as the last step when setting up data.
 
@@ -72,8 +77,8 @@ class DataInterface():
         X_train, X_test, y_train, y_test : Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]
             Dataframes of non-target and target features seperated also split into training and testing data.
         """
-        X_train, X_test, y_train, y_test = train_test_split(self._df_X, self._df_y, test_size=test_size, random_state=42)
-        return X_train, X_test, y_train, y_test
+        self._X_train, self._X_test, self._y_train, self._y_test = train_test_split(self._df_X, self._df_y, test_size=test_size, random_state=42)
+        return self._X_train, self._X_test, self._y_train, self._y_test
     
     def scale_data(self)-> pd.DataFrame:
         """
@@ -128,6 +133,9 @@ class DataInterface():
         Simple way to return the data from before any changes to it.
         """
         return pd.concat[self._df_X_init, self._df_y_init]
+    
+    def get_split_data(self):
+        return self._X_train, self._X_test, self._y_train, self._y_test
 
     @property
     def categorical_features(self) -> Sequence[str]:
@@ -148,6 +156,10 @@ class DataInterface():
     @property
     def target_feature(self) -> str:
         return self._target_feature
+
+    @property
+    def pos_label(self) -> int:
+        return self._pos_label
     
 if __name__ == "__main__":
     df = create_synthetic_data(1000)
@@ -158,6 +170,7 @@ if __name__ == "__main__":
     cat = cols[3:5]
     imm =  [cols[3]]
     
+    
     di = DataInterface(df, None, cont, ord, cat, imm, targ)
     di.encode_data()
     di.scale_data()
@@ -166,3 +179,6 @@ if __name__ == "__main__":
     print(y_train.head(5))
     print(X_train.shape)
     print(X_test.shape)
+    print(X_train.index)
+    print(y_train[y_train == 1].index)
+    print(X_train.loc[y_train[y_train == 1].index])
