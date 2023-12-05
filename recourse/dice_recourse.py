@@ -30,5 +30,5 @@ class DiceRecourse(RecourseInterface):
         )
         return dice_exp.cf_examples_list[0].final_cfs_df
 
-    def get_path(self):
+    def get_paths(self):
         pass

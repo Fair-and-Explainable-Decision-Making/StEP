@@ -15,8 +15,8 @@ class StEPRecourse(RecourseInterface):
         self.StEP_instance = StEP(k_directions, data_interface, model, use_train_data,
                                   confidence_threshold, random_seed)
     
-    def get_counterfactuals(self, X: pd.DataFrame, num_CFs: int = 1, sparsity_param: float = 0.1):
+    def get_counterfactuals(self, poi: pd.DataFrame):
         pass
 
-    def get_path(self):
+    def get_paths(self):
         pass

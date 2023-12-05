@@ -34,7 +34,7 @@ class StEP:
         
         postitive_data = X_data.loc[y_data[y_data == 1].index]
         if confidence_threshold:
-            probs = self.model.predict_proba(postitive_data)
+            probs = self._model.predict_proba(postitive_data.values)
             postitive_confident_df = pd.Series(probs.flatten(), index=postitive_data.index)
             postitive_confident_df = postitive_confident_df[postitive_confident_df >= confidence_threshold]
         if len(postitive_confident_df) == 0:
@@ -63,6 +63,11 @@ class StEP:
             directions.append(self.compute_unnormalized_direction(poi, cluster_data))
         return directions
     
+    def compute_k_direction(self, poi: pd.DataFrame, k: int) -> pd.DataFrame:
+        cluster_data = self.data.loc[self.clusters_assignments[self.clusters_assignments == k].index]
+        return self.compute_unnormalized_direction(poi, cluster_data)
+        
+    
     def compute_unnormalized_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
         diff = cluster_data.values - poi.values
         dist = np.sqrt(np.power(diff, 2).sum(axis=1))
@@ -78,14 +83,28 @@ class StEP:
             direction = self.constant_step_size(direction, self.step_size)
         return direction
     
-    def compute_path(self, poi: pd.DataFrame, max_interations: int):
-        if max_interations == 0:
+    def compute_paths_branching(self, poi: pd.DataFrame, max_interations: int):
+        """if max_interations == 0 or self._model.predict(poi.values)[0] == 1:
             return 
         directions = self.compute_all_directions(poi)
         for d in directions:
             poi = poi.add(d, fill_value=0)
-            self.compute_path(poi, max_interations-1)
+            self.compute_paths_branching(poi, max_interations-1)"""
         pass
+
+    def compute_paths(self, poi: pd.DataFrame):
+        paths = []
+        directions = self.compute_all_directions(poi)
+        for k, d in enumerate(directions):
+            path = [poi]
+            drct = d.copy()
+            for i in self.max_iterations:
+                new_poi = poi.add(drct, fill_value=0)
+                path.append(new_poi)
+                drct = self.compute_k_direction(new_poi, k)
+            paths.append(path)
+        return paths
+
     
     def volcano_alpha(self, dist: np.ndarray, cutoff=0.5, degree=2) -> np.ndarray:
         return 1 / np.where(dist <= cutoff, cutoff, dist) ** degree
@@ -115,4 +134,15 @@ class StEP:
         return (step_size * direction) / normalization
 
 if __name__ == "__main__":
-    pass
+    from ..models.model_interface import ModelInterface
+    from ..data.data_interface import DataInterface
+    from ..data.synthetic_data import create_synthetic_data
+
+    df = create_synthetic_data(1000)
+    cols = list(df.columns)
+    targ = cols[-1]
+    cont = cols[:3]
+    ord = [cols[4]]
+    cat = cols[3:5]
+    imm =  [cols[3]]
+    di = DataInterface(df, None, cont, ord, cat, imm, targ)
