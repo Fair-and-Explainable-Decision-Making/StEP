@@ -7,6 +7,9 @@ from recourse_interface import RecourseInterface
 
 class DiceRecourse(RecourseInterface):
     def __init__(self, model: ModelInterface, data_interface: DataInterface, backend: str = "sklearn") -> None:
+        """
+        TODO: docstring
+        """
         self._model = model
         self._data_interface = data_interface
         train_dataset, test_dataset, _, _ = data_interface.get_split_data() 
@@ -30,5 +33,9 @@ class DiceRecourse(RecourseInterface):
         )
         return dice_exp.cf_examples_list[0].final_cfs_df
 
-    def get_paths(self):
-        pass
+    def get_paths(self, poi: pd.DataFrame, num_CFs: int = 1, sparsity_param: float = 0.1):
+        cfs = self.get_counterfactuals(poi, num_CFs, sparsity_param)
+        paths = []
+        for cf in cfs:
+            paths.append([poi, cf])
+        return paths

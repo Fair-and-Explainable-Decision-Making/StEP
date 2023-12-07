@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from synthetic_data import create_synthetic_data
 
+#TODO: if binary labels set to 0 or 1, also allow for flipping if necessary between pos and neg labels to match our convention
 class DataInterface():
     def __init__(self, data: pd.DataFrame, file_path: str, continuous_features: Sequence[str],
                 ordinal_features: Sequence[str], categorical_features: Sequence[str], immutable_features: Sequence[str],

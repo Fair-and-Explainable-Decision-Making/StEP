@@ -13,5 +13,5 @@ class RecourseInterface(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_paths(self):
+    def get_paths(self, poi: pd.DataFrame):
         pass

@@ -10,11 +10,11 @@ import pandas as pd
 
 
 class PyTorchModel:
-    def __init__(self, model, criteron = nn.BCELoss(), lr = 1e-4, weight_decay = 1e-4, epochs = 5, batch_size=1):
+    def __init__(self, model, criterion = nn.BCELoss(), lr = 1e-4, weight_decay = 1e-4, epochs = 5, batch_size=1):
         self._xtrain = None
         self._ytrain = None
         self._model = model
-        self._criteron = criteron
+        self._criterion = criterion
         self._lr = lr
         self._weight_decay = weight_decay
         self._epochs = epochs
@@ -39,7 +39,7 @@ class PyTorchModel:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model = model.to(device)
 
-        criterion = self._criteron
+        criterion = self._criterion
         optimizer = optim.SGD(model.parameters(), lr=self._lr, weight_decay = self._weight_decay)
 
         for epoch in range(self._epochs):  # loop over the dataset multiple times

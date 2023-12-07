@@ -5,6 +5,8 @@ from models import model_interface
 from data import data_interface
 import pandas as pd
 from sklearn.cluster import KMeans
+from recourse_interface import RecourseInterface
+
 
 class StEP:
     def __init__(
@@ -21,6 +23,7 @@ class StEP:
         else:
             _, _, X_data, y_data = data_inter.get_split_data()
         
+        #comment out data_inter 
         self._data_inter = data_inter
         self.data = self._process_data(X_data, y_data, confidence_threshold=confidence_threshold)
         self.clusters_assignments, self.cluster_centers = self._cluster_data(
@@ -29,19 +32,20 @@ class StEP:
         self.step_size = step_size
         self.max_iterations = max_iterations
 
+    #features, labels
     def _process_data(self, X_data: pd.DataFrame, y_data: pd.Series, 
         confidence_threshold: Optional[float] = None) -> pd.DataFrame:
         
-        postitive_data = X_data.loc[y_data[y_data == 1].index]
+        positive_data = X_data.loc[y_data[y_data == 1].index]
         if confidence_threshold:
-            probs = self._model.predict_proba(postitive_data.values)
-            postitive_confident_df = pd.Series(probs.flatten(), index=postitive_data.index)
-            postitive_confident_df = postitive_confident_df[postitive_confident_df >= confidence_threshold]
-        if len(postitive_confident_df) == 0:
+            probs = self._model.predict_proba(positive_data.values)
+            positive_confident_df = pd.Series(probs.flatten(), index=positive_data.index)
+            positive_confident_df = positive_confident_df[positive_confident_df >= confidence_threshold]
+        if len(positive_confident_df) == 0:
             raise ValueError(
                 "Dataset is empty after excluding negative outcome examples."
             )
-        return postitive_confident_df
+        return positive_confident_df
 
     def _cluster_data(self, data: pd.DataFrame, k_directions: int,
         random_seed: Optional[int] = None) -> (pd.DataFrame, np.ndarray):
@@ -51,7 +55,7 @@ class StEP:
         cluster_assignments_df = pd.DataFrame(
             index=data.index,
             columns=["datapoint_cluster"],
-            data=cluster_assignments,
+            data=cluster_assignments
         )
         cluster_centers = km.cluster_centers_
         return cluster_assignments_df, cluster_centers
@@ -96,10 +100,11 @@ class StEP:
         paths = []
         directions = self.compute_all_directions(poi)
         for k, d in enumerate(directions):
-            path = [poi]
+            new_poi = poi.copy()
+            path = [new_poi]
             drct = d.copy()
             for i in self.max_iterations:
-                new_poi = poi.add(drct, fill_value=0)
+                new_poi = new_poi.add(drct, fill_value=0)
                 path.append(new_poi)
                 drct = self.compute_k_direction(new_poi, k)
             paths.append(path)
@@ -133,6 +138,25 @@ class StEP:
             normalization = _MIN_DIRECTION
         return (step_size * direction) / normalization
 
+class StEPRecourse(RecourseInterface):
+    def __init__(self, model: ModelInterface, data_interface:DataInterface,
+        num_clusters: int, use_train_data: bool = True,
+        confidence_threshold: Optional[float] = None, random_seed: Optional[int] = None
+    ) -> None:
+        
+        self.StEP_instance = StEP(num_clusters, data_interface, model, use_train_data,
+                                  confidence_threshold, random_seed)
+    
+    def get_counterfactuals(self, poi: pd.DataFrame) -> pd.Dataframe:
+        cfs = []
+        paths = self.StEP_instance.compute_paths(poi)
+        for p in paths:
+            cfs.append(p[-1])
+        return pd.concat(cfs, ignore_index=True)
+
+    def get_paths(self, poi: pd.DataFrame):
+        return self.StEP_instance.compute_paths(poi)
+    
 if __name__ == "__main__":
     from ..models.model_interface import ModelInterface
     from ..data.data_interface import DataInterface

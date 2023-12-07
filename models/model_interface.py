@@ -55,3 +55,11 @@ if __name__ == "__main__":
     print(mi.predict(XZ)[:10])
     print(mi.predict_proba(XZ)[:10])
     print()
+    XZ_test = XZ.sample(frac=1)
+    probs = mi.predict_proba(XZ_test)
+    conf_df = pd.Series(probs.flatten(), index=XZ_test.index)
+    print(XZ_test.head(5))
+    print(conf_df.head(5))
+    conf_inter = 0.55
+    conf_df = conf_df[conf_df >= conf_inter]
+    print(conf_df)
