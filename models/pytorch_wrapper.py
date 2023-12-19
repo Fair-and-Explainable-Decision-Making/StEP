@@ -2,17 +2,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils import data as data
-
 import numpy as np
-from pytorch_models.dnn_basic import DNN
-from pytorch_models.logreg import LogisticRegression
 import pandas as pd
+
+from models.pytorch_models.dnn_basic import BaselineDNN
+from models.pytorch_models.logreg import LogisticRegression
+
 
 
 class PyTorchModel:
     def __init__(self, model, criterion = nn.BCELoss(), lr = 1e-4, weight_decay = 1e-4, epochs = 5, batch_size=1):
-        self._xtrain = None
-        self._ytrain = None
         self._model = model
         self._criterion = criterion
         self._lr = lr
@@ -22,16 +21,14 @@ class PyTorchModel:
         
 
     def fit(self, xtrain, ytrain):
-        self._xtrain = xtrain
-        self._ytrain = ytrain
-        if isinstance(self._xtrain, pd.DataFrame):
-            self._xtrain = self._xtrain.to_numpy()
-        if isinstance(self._ytrain, pd.Series):
-            self._ytrain = self._ytrain.to_numpy()
+        if isinstance(xtrain, pd.DataFrame):
+            xtrain = xtrain.to_numpy()
+        if isinstance(ytrain, pd.Series):
+            ytrain = ytrain.to_numpy()
         if not isinstance(self._model, nn.Module):
             raise Exception("Not a compatible PyTorch implementation.")
-        tensor_x = torch.Tensor(self._xtrain)
-        tensor_y = torch.Tensor(self._ytrain.flatten())
+        tensor_x = torch.Tensor(xtrain)
+        tensor_y = torch.Tensor(ytrain.flatten())
         train_data = torch.utils.data.TensorDataset(tensor_x,tensor_y)
         trainloader = torch.utils.data.DataLoader(train_data, batch_size=self._batch_size)
 
@@ -39,7 +36,6 @@ class PyTorchModel:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model = model.to(device)
 
-        criterion = self._criterion
         optimizer = optim.SGD(model.parameters(), lr=self._lr, weight_decay = self._weight_decay)
 
         for epoch in range(self._epochs):  # loop over the dataset multiple times
@@ -53,7 +49,7 @@ class PyTorchModel:
 
                 # forward + backward + optimize
                 outputs = model(inputs)
-                loss = criterion(outputs, target.unsqueeze(-1))
+                loss = self._criterion(outputs, target.unsqueeze(-1))
                 loss.backward()
                 optimizer.step()
 
@@ -83,18 +79,3 @@ class PyTorchModel:
     def predict(self, X):
         out = self.predict_proba(X)[:, 0]
         return np.array(out > 0.5, dtype=np.int32)
-
-
-if __name__ == "__main__":
-    X = np.random.random((1000, 3))
-    Z = np.random.randint(2, size=1000).reshape(-1,1)
-
-    XZ = np.hstack([X,Z])
-    w = np.array([1.0, -2.0, 3.0, 2.0])
-    y = 1/(1 + np.exp(-XZ @ w))
-    Y = np.array(y >= 0.5, dtype=np.int32).reshape(-1,1)
-    print(Y[:10])
-    model = PyTorchModel(DNN(XZ.shape[1]),batch_size=1)
-    model.fit(XZ,y)
-    print(model.predict(XZ)[:10])
-    print(model.predict_proba(XZ)[:10])

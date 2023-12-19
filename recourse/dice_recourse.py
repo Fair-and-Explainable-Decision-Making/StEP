@@ -19,10 +19,12 @@ class DiceRecourse(RecourseInterface):
             outcome_name=data_interface.target_feature,
         )
         self._dice_model = dice_ml.Model(model=self._model, backend=backend)
+        #TODO: better naming for PYT
         if backend == "PYT":
             self._dice = dice_ml.Dice(self._dice_data, self._dice_model, method="gradient")
         else:
             self._dice = dice_ml.Dice(self._dice_data, self._dice_model, method="random")
+    
     
     def get_counterfactuals(self, poi: pd.DataFrame, num_CFs: int = 1, sparsity_param: float = 0.1):
         dice_exp = self._dice.generate_counterfactuals(

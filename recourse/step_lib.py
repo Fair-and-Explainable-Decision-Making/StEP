@@ -5,7 +5,7 @@ from models import model_interface
 from data import data_interface
 import pandas as pd
 from sklearn.cluster import KMeans
-from recourse_interface import RecourseInterface
+from recourse.recourse_interface import RecourseInterface
 
 
 class StEP:
@@ -139,7 +139,7 @@ class StEP:
         return (step_size * direction) / normalization
 
 class StEPRecourse(RecourseInterface):
-    def __init__(self, model: ModelInterface, data_interface:DataInterface,
+    def __init__(self, model: model_interface.ModelInterface, data_interface: data_interface.DataInterface,
         num_clusters: int, use_train_data: bool = True,
         confidence_threshold: Optional[float] = None, random_seed: Optional[int] = None
     ) -> None:
@@ -157,16 +157,3 @@ class StEPRecourse(RecourseInterface):
     def get_paths(self, poi: pd.DataFrame):
         return self.StEP_instance.compute_paths(poi)
     
-if __name__ == "__main__":
-    from ..models.model_interface import ModelInterface
-    from ..data.data_interface import DataInterface
-    from ..data.synthetic_data import create_synthetic_data
-
-    df = create_synthetic_data(1000)
-    cols = list(df.columns)
-    targ = cols[-1]
-    cont = cols[:3]
-    ord = [cols[4]]
-    cat = cols[3:5]
-    imm =  [cols[3]]
-    di = DataInterface(df, None, cont, ord, cat, imm, targ)
