@@ -5,6 +5,9 @@ import abc
 
 
 class RecourseInterface(abc.ABC):
+    """
+    TODO: docstring
+    """
     def __init__(self, model: ModelInterface, data_interface: DataInterface) -> None:
         pass
 

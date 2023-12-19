@@ -55,8 +55,8 @@ class DataInterface():
         else:
             raise Exception("No data and file path provided")
         self.dataset = df.copy()
-        self._df_y = df[self._target_feature]
-        self._df_X = df[df.columns[df.columns != target_feature]]
+        self._labels_df = df[self._target_feature]
+        self._features_df = df[df.columns[df.columns != target_feature]]
         self._pos_label = pos_label
     
     def split_data(self, test_size: float = 0.3) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]:
@@ -72,8 +72,8 @@ class DataInterface():
         X_train, X_test, y_train, y_test : Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]
             Dataframes of non-target and target features seperated also split into training and testing data.
         """
-        self._X_train, self._X_test, self._y_train, self._y_test = train_test_split(self._df_X, self._df_y, test_size=test_size, random_state=42)
-        return self._X_train, self._X_test, self._y_train, self._y_test
+        self._features_train, self._features_test, self._labels_train, self._labels_test = train_test_split(self._features_df, self._labels_df, test_size=test_size, random_state=42)
+        return self._features_train, self._features_test, self._labels_train, self._labels_test
     
     def scale_data(self)-> pd.DataFrame:
         """
@@ -84,7 +84,7 @@ class DataInterface():
 
         Returns
         -------
-        self._df_X : pd.DataFrame
+        self._features_df : pd.DataFrame
             Dataframe of scaled data.
         """
         if self._scaling_method == "MinMax":
@@ -92,30 +92,30 @@ class DataInterface():
         elif self._scaling_method == "Standard":
             scaler = StandardScaler()
         else:
-            return self._df_X
+            return self._features_df
         #in classification we don't want to scale the target column
-        scaled = scaler.fit_transform(self._df_X) 
-        self._df_X = pd.DataFrame(scaled, columns=self._df_X.columns,index=self._df_X.index)
-        return self._df_X
+        scaled = scaler.fit_transform(self._features_df) 
+        self._features_df = pd.DataFrame(scaled, columns=self._features_df.columns,index=self._features_df.index)
+        return self._features_df
 
     def encode_data(self) -> pd.DataFrame:
         """
         Applies one hot encoding to categorical features
         """ 
         if self._encoding_method == "OneHot":
-            self._df_X = pd.get_dummies(self._df_X, columns = self._categorical_features) 
-        return self._df_X
+            self._features_df = pd.get_dummies(self._features_df, columns = self._categorical_features) 
+        return self._features_df
 
     def get_data(self):
         """
         Simple way to return the data.
         """
-        return pd.concat[self._df_X, self._df_y]
+        return pd.concat[self._features_df, self._labels_df]
     
     def get_split_data(self):
-        if None in [self._X_train, self._X_test, self._y_train, self._y_test]:
+        if None in [self._features_train, self._features_test, self._labels_train, self._labels_test]:
             raise Exception("One of your splits are None")
-        return self._X_train, self._X_test, self._y_train, self._y_test
+        return self._features_train, self._features_test, self._labels_train, self._labels_test
 
     @property
     def categorical_features(self) -> Sequence[str]:

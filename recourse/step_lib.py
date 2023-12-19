@@ -9,6 +9,9 @@ from recourse.recourse_interface import RecourseInterface
 
 
 class StEP:
+    """
+    TODO: docstring
+    """
     def __init__(
         self, k_directions: int, data_inter: data_interface.DataInterface,
         model: model_interface.ModelInterface, use_train_data: bool = True, 
@@ -19,24 +22,22 @@ class StEP:
         self.k_directions = k_directions
         self._model = model
         if use_train_data:
-            X_data, y_data, _, _ = data_inter.get_split_data()
+            features, labels, _, _ = data_inter.get_split_data()
         else:
-            _, _, X_data, y_data = data_inter.get_split_data()
+            _, _, features, labels = data_inter.get_split_data()
         
-        #comment out data_inter 
-        self._data_inter = data_inter
-        self.data = self._process_data(X_data, y_data, confidence_threshold=confidence_threshold)
+        self.processed_data = self._process_data(features, labels, confidence_threshold=confidence_threshold)
         self.clusters_assignments, self.cluster_centers = self._cluster_data(
-                self.data, self.k_directions, random_seed=random_seed
+                self.processed_data, self.k_directions, random_seed=random_seed
             )
         self.step_size = step_size
         self.max_iterations = max_iterations
 
     #features, labels
-    def _process_data(self, X_data: pd.DataFrame, y_data: pd.Series, 
+    def _process_data(self, features: pd.DataFrame, labels: pd.Series, 
         confidence_threshold: Optional[float] = None) -> pd.DataFrame:
         
-        positive_data = X_data.loc[y_data[y_data == 1].index]
+        positive_data = features.loc[labels[labels == 1].index]
         if confidence_threshold:
             probs = self._model.predict_proba(positive_data.values)
             positive_confident_df = pd.Series(probs.flatten(), index=positive_data.index)
@@ -63,15 +64,14 @@ class StEP:
     def compute_all_directions(self, poi: pd.DataFrame) -> list:
         directions = []
         for cluster_index in range(self.k_directions):
-            cluster_data = self.data.loc[self.clusters_assignments[self.clusters_assignments == cluster_index].index]
+            cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments == cluster_index].index]
             directions.append(self.compute_unnormalized_direction(poi, cluster_data))
         return directions
     
     def compute_k_direction(self, poi: pd.DataFrame, k: int) -> pd.DataFrame:
-        cluster_data = self.data.loc[self.clusters_assignments[self.clusters_assignments == k].index]
+        cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments == k].index]
         return self.compute_unnormalized_direction(poi, cluster_data)
         
-    
     def compute_unnormalized_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
         diff = cluster_data.values - poi.values
         dist = np.sqrt(np.power(diff, 2).sum(axis=1))
@@ -86,15 +86,6 @@ class StEP:
         if self.step_size:
             direction = self.constant_step_size(direction, self.step_size)
         return direction
-    
-    def compute_paths_branching(self, poi: pd.DataFrame, max_interations: int):
-        """if max_interations == 0 or self._model.predict(poi.values)[0] == 1:
-            return 
-        directions = self.compute_all_directions(poi)
-        for d in directions:
-            poi = poi.add(d, fill_value=0)
-            self.compute_paths_branching(poi, max_interations-1)"""
-        pass
 
     def compute_paths(self, poi: pd.DataFrame):
         paths = []
@@ -139,6 +130,9 @@ class StEP:
         return (step_size * direction) / normalization
 
 class StEPRecourse(RecourseInterface):
+    """
+    TODO: docstring
+    """
     def __init__(self, model: model_interface.ModelInterface, data_interface: data_interface.DataInterface,
         num_clusters: int, use_train_data: bool = True,
         confidence_threshold: Optional[float] = None, random_seed: Optional[int] = None
