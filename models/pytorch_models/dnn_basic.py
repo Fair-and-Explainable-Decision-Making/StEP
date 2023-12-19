@@ -3,10 +3,10 @@ import torch.nn.functional as F
 from torch.utils import data as data
 
 
-class DNN(nn.Module):
+class BaselineDNN(nn.Module):
 
     def __init__(self, input_size: int, num_classes: int = 1):
-        super(DNN, self).__init__()
+        super(BaselineDNN, self).__init__()
         self.fc1 = nn.Linear(input_size, 16)
         self.fc2 = nn.Linear(16, 32)
         self.fc3 = nn.Linear(32, 1)

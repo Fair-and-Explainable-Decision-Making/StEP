@@ -4,7 +4,7 @@ import torch.nn as nn
 
 class LogisticRegression(nn.Module):
     """
-    Logisitc Regression model using PyTorch
+    Logisitc Regression model using PyTorch.
     Args:
         input_dim: num of features of the dataset that will be passed in
     """

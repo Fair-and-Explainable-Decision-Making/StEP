@@ -4,8 +4,9 @@ import os
 import pathlib
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from synthetic_data import create_synthetic_data
+from data.synthetic_data import create_synthetic_data
 
+#TODO: if binary labels set to 0 or 1, also allow for flipping if necessary between pos and neg labels to match our convention
 class DataInterface():
     def __init__(self, data: pd.DataFrame, file_path: str, continuous_features: Sequence[str],
                 ordinal_features: Sequence[str], categorical_features: Sequence[str], immutable_features: Sequence[str],
@@ -53,15 +54,9 @@ class DataInterface():
             df = pd.read_csv(file_path)
         else:
             raise Exception("No data and file path provided")
-        X_features = df.columns[df.columns != target_feature]
+        self.dataset = df.copy()
         self._df_y = df[self._target_feature]
-        self._df_X = df[X_features]
-        self._df_y_init = self._df_y.copy()
-        self._df_X_init = self._df_X.copy()
-        self._X_train = None
-        self._X_test = None
-        self._y_train = None
-        self._y_test = None
+        self._df_X = df[df.columns[df.columns != target_feature]]
         self._pos_label = pos_label
     
     def split_data(self, test_size: float = 0.3) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]:
@@ -111,30 +106,15 @@ class DataInterface():
             self._df_X = pd.get_dummies(self._df_X, columns = self._categorical_features) 
         return self._df_X
 
-    def save_data(self, dataset_filepath: str) -> None:
-        """Saves the data to local disk as a csv.
-
-        Args:
-            dataset_filepath: The filepath to save the data to.
-        """
-        if not os.path.exists(pathlib.Path(dataset_filepath).parent):
-            os.makedirs(pathlib.Path(dataset_filepath).parent)
-        df = pd.concat[self._df_X, self._df_y]
-        df.to_csv(dataset_filepath, header=True, index=False)
-
     def get_data(self):
         """
         Simple way to return the data.
         """
         return pd.concat[self._df_X, self._df_y]
     
-    def get_init_data(self):
-        """
-        Simple way to return the data from before any changes to it.
-        """
-        return pd.concat[self._df_X_init, self._df_y_init]
-    
     def get_split_data(self):
+        if None in [self._X_train, self._X_test, self._y_train, self._y_test]:
+            raise Exception("One of your splits are None")
         return self._X_train, self._X_test, self._y_train, self._y_test
 
     @property
@@ -161,24 +141,3 @@ class DataInterface():
     def pos_label(self) -> int:
         return self._pos_label
     
-if __name__ == "__main__":
-    df = create_synthetic_data(1000)
-    cols = list(df.columns)
-    targ = cols[-1]
-    cont = cols[:3]
-    ord = [cols[4]]
-    cat = cols[3:5]
-    imm =  [cols[3]]
-    
-    
-    di = DataInterface(df, None, cont, ord, cat, imm, targ)
-    di.encode_data()
-    di.scale_data()
-    X_train, X_test, y_train, y_test = di.split_data()
-    print(X_train.head(5))
-    print(y_train.head(5))
-    print(X_train.shape)
-    print(X_test.shape)
-    print(X_train.index)
-    print(y_train[y_train == 1].index)
-    print(X_train.loc[y_train[y_train == 1].index])

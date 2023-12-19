@@ -3,13 +3,11 @@ from typing import Union
 import sklearn 
 import numpy as np
 import torch
-
-#from  data.synthetic_data import create_synthetic_data
-#from  data.data_interface import DataInterface
-from pytorch_wrapper import PyTorchModel
 from sklearn.linear_model import LogisticRegression
-from pytorch_models.dnn_basic import DNN
-from pytorch_models.logreg import LogisticRegression as LogReg
+
+from models.pytorch_wrapper import PyTorchModel
+from models.pytorch_models.dnn_basic import BaselineDNN
+from models.pytorch_models.logreg import LogisticRegression as LogReg
 
 class ModelInterface():
     def __init__(self, model: Union[sklearn.base.BaseEstimator, PyTorchModel]):
@@ -36,22 +34,3 @@ class ModelInterface():
     def get_model(self) -> str:
         return self._model
     
-if __name__ == "__main__":
-    X = np.random.random((1000, 3))
-    Z = np.random.randint(2, size=1000).reshape(-1,1)
-
-    XZ = np.hstack([X,Z])
-    w = np.array([1.0, -2.0, 3.0, 2.0])
-    y = 1/(1 + np.exp(-XZ @ w))
-    Y = np.array(y >= 0.5, dtype=np.int32).reshape(-1,1)
-    XZ = pd.DataFrame(XZ, columns=['X1','X2','X3','Z'])
-    Y = pd.Series(Y.flatten())
-    print(XZ)
-    print(Y[:10])
-    model = PyTorchModel(DNN(XZ.shape[1]),batch_size=1)
-    mi = ModelInterface(model)
-    mi.fit(XZ,Y)
-    print("DNN")
-    print(mi.predict(XZ)[:10])
-    print(mi.predict_proba(XZ)[:10])
-    print()
