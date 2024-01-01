@@ -5,7 +5,13 @@ from torch.utils import data as data
 
 class BaselineDNN(nn.Module):
     """
-    TODO: docstring
+    Baseline deep neural network using PyTorch.
+    Parameters
+    ----------
+    num_features : int
+        Number of features of the dataset that will be passed in.
+    num_classes : int
+        Number of unque labels/classes for the data. 
     """
     def __init__(self, num_features: int, num_classes: int = 1):
         super(BaselineDNN, self).__init__()

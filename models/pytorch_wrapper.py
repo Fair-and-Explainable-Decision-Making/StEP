@@ -1,18 +1,32 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from typing import Union
 from torch.utils import data as data
 import numpy as np
 import pandas as pd
 
-from models.pytorch_models.dnn_basic import BaselineDNN
-from models.pytorch_models.logreg import LogisticRegression
-
+DATA_TYPES = Union[np.ndarray, pd.DataFrame, torch.Tensor]
 
 class PyTorchModel:
     """
-    TODO: docstring
-    Indicate to the user that they can use any custom PyTorch architecture that inherits from nn.Module
+    Wrapper for a PyTorch models that inherit from nn.Module. 
+    PyTorch model must have constructor with architecture and a forward function.
+
+    Parameters
+    ----------
+    model : nn.Module
+        The PyTorch model to be used. 
+    criterion : torch.nn loss function
+        Criterion that measures the loss between the target and the input probabilities.
+    lr : float
+        Learning rate.
+    weight_decay : float
+        Weight decay.
+    epochs : int
+        Number of epochs for training.
+    batch_size : int
+        Number of samples for each batch.
     """
     def __init__(self, model, criterion = nn.BCELoss(), lr = 1e-4, weight_decay = 1e-4, epochs = 5, batch_size=1):
         self._model = model
@@ -24,6 +38,16 @@ class PyTorchModel:
         
 
     def fit(self, features, labels):
+        """
+        Trains the PyTorch model with the passed in data and parameters defined in the constuctor.
+
+        Parameters
+        ----------
+        features : Union[np.ndarray, pd.DataFrame, torch.Tensor]
+            A tabular data object with the features and samples used for training.
+        labels : Union[np.ndarray, pd.DataFrame, torch.Tensor]
+            A tabular data object with the labels for each sample used for training.
+        """
         if isinstance(features, pd.DataFrame):
             features = features.to_numpy()
         if isinstance(labels, pd.Series):
@@ -69,16 +93,43 @@ class PyTorchModel:
         return self._model
 
     def predict_proba(self, features, grad=False):
+        """
+        Runs a fowards pass for inference to get the probability estimate
+        for each label.
+
+        Parameters
+        ----------
+        features : Union[np.ndarray, pd.DataFrame, torch.Tensor]
+            A tabular data object with the features and samples used for inference.
+        Returns
+        -------
+        outputs : np.ndarray
+            Array of probability estimates for each label.
+        """
         if isinstance(features, pd.DataFrame) or isinstance(features, pd.Series):
             features = features.to_numpy()
-        tensor_features = torch.Tensor(features)
+        if not isinstance(features, torch.Tensor):
+            features = torch.Tensor(features)
         if grad:
-            outputs = self._model(tensor_features)
+            outputs = self._model(features)
         else: 
             with torch.no_grad():
-                outputs = self._model(tensor_features)
+                outputs = self._model(features)
         return outputs.numpy()
     
     def predict(self, features):
+        """
+        Makes binary predictions based on input data. Threshold for binary decision
+        is 0.50.
+
+        Parameters
+        ----------
+        features : np.ndarray
+            A tabular data object with the features and samples used for inference.
+        Returns
+        -------
+        (out > 0.5) : np.ndarray
+            Array of binary outcomes.
+        """
         out = self.predict_proba(features)[:, 0]
         return np.array(out > 0.5, dtype=np.int32)

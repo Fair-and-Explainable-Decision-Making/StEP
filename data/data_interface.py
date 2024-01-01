@@ -1,10 +1,7 @@
 import pandas as pd
 from typing import Sequence, Any, Tuple
-import os
-import pathlib
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from data.synthetic_data import create_synthetic_data
 
 #TODO: if binary labels set to 0 or 1, also allow for flipping if necessary between pos and neg labels to match our convention
 class DataInterface():
@@ -72,6 +69,7 @@ class DataInterface():
         X_train, X_test, y_train, y_test : Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]
             Dataframes of non-target and target features seperated also split into training and testing data.
         """
+        #TODO: add validation split
         self._features_train, self._features_test, self._labels_train, self._labels_test = train_test_split(self._features_df, self._labels_df, test_size=test_size, random_state=42)
         return self._features_train, self._features_test, self._labels_train, self._labels_test
     
@@ -100,7 +98,12 @@ class DataInterface():
 
     def encode_data(self) -> pd.DataFrame:
         """
-        Applies one hot encoding to categorical features
+        Applies one hot encoding to categorical features.
+
+        Returns
+        -------
+        self._features_df : pd.DataFrame
+            Dataframe of features data after one-hot encoding.
         """ 
         if self._encoding_method == "OneHot":
             self._features_df = pd.get_dummies(self._features_df, columns = self._categorical_features) 
@@ -108,11 +111,19 @@ class DataInterface():
 
     def get_data(self):
         """
-        Simple way to return the data.
+        Simple way to return the processed data with labels column.
+        
+        Returns
+        -------
+        pd.concat[self._features_df, self._labels_df] : pd.DataFrame
+            Dataframe of potentially scaled and encoded data with features and labels.
         """
         return pd.concat[self._features_df, self._labels_df]
     
     def get_split_data(self):
+        """
+        Returns the split data if it has been created.
+        """
         if None in [self._features_train, self._features_test, self._labels_train, self._labels_test]:
             raise Exception("One of your splits are None")
         return self._features_train, self._features_test, self._labels_train, self._labels_test
