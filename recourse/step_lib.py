@@ -14,24 +14,25 @@ class StEP:
     """
     def __init__(
         self, k_directions: int, data_inter: data_interface.DataInterface,
-        model: model_interface.ModelInterface, use_train_data: bool = True, 
-        confidence_threshold: Optional[float] = None, random_seed: Optional[int] = None,
-        step_size: Optional[float] = None, max_iterations: Optional[int] = None
+        model: model_interface.ModelInterface, max_iterations: int, 
+        use_train_data: bool = True, confidence_threshold: Optional[float] = None, 
+        random_seed: Optional[int] = None, step_size: Optional[float] = None,
+        normalize_directions: bool = True 
     ):
         
         self.k_directions = k_directions
         self._model = model
         if use_train_data:
-            features, labels, _, _ = data_inter.get_split_data()
+            features, _, labels, _ = data_inter.get_split_data()
         else:
-            _, _, features, labels = data_inter.get_split_data()
-        
+            _, features, _, labels = data_inter.get_split_data()
         self.processed_data = self._process_data(features, labels, confidence_threshold=confidence_threshold)
         self.clusters_assignments, self.cluster_centers = self._cluster_data(
                 self.processed_data, self.k_directions, random_seed=random_seed
             )
         self.step_size = step_size
         self.max_iterations = max_iterations
+        self.normalize_directions = normalize_directions
 
     #features, labels
     def _process_data(self, features: pd.DataFrame, labels: pd.Series, 
@@ -46,7 +47,7 @@ class StEP:
             raise ValueError(
                 "Dataset is empty after excluding negative outcome examples."
             )
-        return positive_confident_df
+        return features.loc[positive_confident_df.index]
 
     def _cluster_data(self, data: pd.DataFrame, k_directions: int,
         random_seed: Optional[int] = None) -> (pd.DataFrame, np.ndarray):
@@ -64,13 +65,14 @@ class StEP:
     def compute_all_directions(self, poi: pd.DataFrame) -> list:
         directions = []
         for cluster_index in range(self.k_directions):
-            cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments == cluster_index].index]
-            directions.append(self.compute_unnormalized_direction(poi, cluster_data))
+            cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == cluster_index].index]
+            direction = self.compute_direction(poi, cluster_data)
+            directions.append(direction)
         return directions
     
     def compute_k_direction(self, poi: pd.DataFrame, k: int) -> pd.DataFrame:
-        cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments == k].index]
-        return self.compute_unnormalized_direction(poi, cluster_data)
+        cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == k].index]
+        return self.compute_direction(poi, cluster_data)
         
     def compute_unnormalized_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
         diff = cluster_data.values - poi.values
@@ -79,12 +81,16 @@ class StEP:
         if np.isnan(alpha_val).any():
             raise RuntimeError(f"Alpha function returned NaN values: {alpha_val}")
         direction = diff.T @ alpha_val
-        return pd.DataFrame(direction, columns=cluster_data.columns)
+        direction_df = poi.copy()
+        direction_df.iloc[0] = pd.Series(direction)
+        return direction_df
     
     def compute_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
         direction = self.compute_unnormalized_direction(poi, cluster_data)
         if self.step_size:
             direction = self.constant_step_size(direction, self.step_size)
+        if self.normalize_directions:
+                direction = direction/len(cluster_data)
         return direction
 
     def compute_paths(self, poi: pd.DataFrame):
@@ -94,7 +100,7 @@ class StEP:
             new_poi = poi.copy()
             path = [new_poi]
             drct = d.copy()
-            for i in self.max_iterations:
+            for i in range(self.max_iterations):
                 new_poi = new_poi.add(drct, fill_value=0)
                 path.append(new_poi)
                 drct = self.compute_k_direction(new_poi, k)
@@ -134,20 +140,20 @@ class StEPRecourse(RecourseInterface):
     TODO: docstring
     """
     def __init__(self, model: model_interface.ModelInterface, data_interface: data_interface.DataInterface,
-        num_clusters: int, use_train_data: bool = True,
-        confidence_threshold: Optional[float] = None, random_seed: Optional[int] = None
+        num_clusters: int, max_iterations: int, use_train_data: bool = True,
+        confidence_threshold: Optional[float] = None, random_seed: Optional[int] = None, step_size = None
     ) -> None:
         
-        self.StEP_instance = StEP(num_clusters, data_interface, model, use_train_data,
-                                  confidence_threshold, random_seed)
+        self.StEP_instance = StEP(num_clusters, data_interface, model, max_iterations, use_train_data, 
+                                  confidence_threshold, random_seed, step_size)
     
-    def get_counterfactuals(self, poi: pd.DataFrame) -> pd.Dataframe:
+    def get_counterfactuals(self, poi: pd.DataFrame) -> list:
         cfs = []
         paths = self.StEP_instance.compute_paths(poi)
         for p in paths:
             cfs.append(p[-1])
-        return pd.concat(cfs, ignore_index=True)
+        return cfs
 
-    def get_paths(self, poi: pd.DataFrame):
+    def get_paths(self, poi: pd.DataFrame) -> list:
         return self.StEP_instance.compute_paths(poi)
     

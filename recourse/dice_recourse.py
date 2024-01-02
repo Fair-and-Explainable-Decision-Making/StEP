@@ -4,7 +4,6 @@ import dice_ml
 import pandas as pd
 from recourse_interface import RecourseInterface
 
-
 class DiceRecourse(RecourseInterface):
     def __init__(self, model: ModelInterface, data_interface: DataInterface, backend: str = "sklearn") -> None:
         """

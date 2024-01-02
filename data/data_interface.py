@@ -124,9 +124,11 @@ class DataInterface():
         """
         Returns the split data if it has been created.
         """
-        if None in [self._features_train, self._features_test, self._labels_train, self._labels_test]:
+        if (self._features_train is not None or self._features_test is not None 
+            or self._labels_train is not None or self._labels_test is not None):
+            return self._features_train, self._features_test, self._labels_train, self._labels_test
+        else:
             raise Exception("One of your splits are None")
-        return self._features_train, self._features_test, self._labels_train, self._labels_test
 
     @property
     def categorical_features(self) -> Sequence[str]:
