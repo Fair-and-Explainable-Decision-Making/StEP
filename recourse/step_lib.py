@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Sequence
 import numpy as np
 from models import model_interface
 from data import data_interface
@@ -38,9 +38,10 @@ class StEP:
         self.max_iterations = max_iterations
         self.directions_rescaler = directions_rescaler
 
-    #features, labels
+    
     def _process_data(self, features: pd.DataFrame, labels: pd.Series, 
-        confidence_threshold: Optional[float] = None) -> pd.DataFrame:
+                      confidence_threshold: Optional[float] = None) -> pd.DataFrame:
+        # TODO: write docstring.
         
         positive_data = features.loc[labels[labels == 1].index]
         if confidence_threshold:
@@ -53,9 +54,10 @@ class StEP:
             )
         return features.loc[positive_confident_df.index]
 
-    def _cluster_data(self, data: pd.DataFrame, k_directions: int,
-        random_seed: Optional[int] = None) -> (pd.DataFrame, np.ndarray):
-        
+    def _cluster_data(self, data: pd.DataFrame, k_directions: int, 
+                      random_seed: Optional[int] = None) -> (pd.DataFrame, np.ndarray):
+        # TODO: write docstring.
+
         km = KMeans(n_clusters=k_directions, random_state=random_seed)
         cluster_assignments = np.array(km.fit_predict(data)).reshape(-1,1)
         cluster_assignments_df = pd.DataFrame(
@@ -66,7 +68,8 @@ class StEP:
         cluster_centers = km.cluster_centers_
         return cluster_assignments_df, cluster_centers
     
-    def compute_all_directions(self, poi: pd.DataFrame) -> list:
+    def compute_all_directions(self, poi: pd.DataFrame) -> Sequence:
+        # TODO: write docstring.
         directions = []
         for cluster_index in range(self.k_directions):
             cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == cluster_index].index]
@@ -75,10 +78,14 @@ class StEP:
         return directions
     
     def compute_k_direction(self, poi: pd.DataFrame, k: int) -> pd.DataFrame:
+        # Compute the k-th direction. I think this can be combined into another function.
         cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == k].index]
         return self.compute_direction(poi, cluster_data)
         
     def compute_unnormalized_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
+        # TODO: write docstring.
+        # Feedback: the distance metric we use is a hyperparameter/decision choice. 
+        # As a future feature request, this should be changed to be passed as a parameter.
         diff = cluster_data.values - poi.values
         dist = np.sqrt(np.power(diff, 2).sum(axis=1))
         alpha_val = self.volcano_alpha(dist)
@@ -90,15 +97,18 @@ class StEP:
         return direction_df
     
     def compute_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
+        # TODO: write docstring.
         direction = self.compute_unnormalized_direction(poi, cluster_data)
         if self.directions_rescaler == "normalize":
-                direction = direction/len(cluster_data)
+                direction = direction / len(cluster_data)
         elif self.directions_rescaler == "constant step size":
             direction = self.constant_step_size(direction, self.step_size)
-        
         return direction
 
     def compute_paths(self, poi: pd.DataFrame):
+        # TODO: write docstring.
+        # TODO: please consider parallelizing this / avoiding looping over the directions
+        # on a per-PoI basis. This will be the big computational bottleneck.
         paths = []
         directions = self.compute_all_directions(poi)
         for k, d in enumerate(directions):
@@ -114,14 +124,10 @@ class StEP:
             paths.append(path)
         return paths
 
-    
     def volcano_alpha(self, dist: np.ndarray, cutoff=0.5, degree=2) -> np.ndarray:
         return 1 / np.where(dist <= cutoff, cutoff, dist) ** degree
     
-    def constant_step_size(self,
-        direction: pd.DataFrame, step_size: float = 1
-    ) -> pd.DataFrame:
-        
+    def constant_step_size(self, direction: pd.DataFrame, step_size: float = 1) -> pd.DataFrame:
         """Rescales a vector to a given fixed size measured by L2 norm.
 
         Args:
@@ -155,13 +161,15 @@ class StEPRecourse(RecourseInterface):
         self.StEP_instance = StEP(num_clusters, data_interface, model, max_iterations, use_train_data, 
                                   confidence_threshold, random_seed, step_size, directions_rescaler)
     
-    def get_counterfactuals(self, poi: pd.DataFrame) -> list:
+    def get_counterfactuals(self, poi: pd.DataFrame) -> Sequence:
+        # TODO: write docstring.
         cfs = []
         paths = self.StEP_instance.compute_paths(poi)
         for p in paths:
             cfs.append(p[-1])
         return cfs
 
-    def get_paths(self, poi: pd.DataFrame) -> list:
+    def get_paths(self, poi: pd.DataFrame) -> Sequence:
+        # TODO: write docstring.
         return self.StEP_instance.compute_paths(poi)
     
