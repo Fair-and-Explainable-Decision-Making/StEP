@@ -108,7 +108,8 @@ class StEP:
             for i in range(self.max_iterations):
                 new_poi = new_poi.add(drct, fill_value=0)
                 path.append(new_poi)
-                if self._model.predict(poi) == 1: break
+                if self._model.predict(new_poi) == 1: 
+                    break
                 drct = self.compute_k_direction(new_poi, k)
             paths.append(path)
         return paths
