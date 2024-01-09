@@ -38,7 +38,6 @@ class StEP:
         self.max_iterations = max_iterations
         self.directions_rescaler = directions_rescaler
 
-    
     def _process_data(self, features: pd.DataFrame, labels: pd.Series, 
                       confidence_threshold: Optional[float] = None) -> pd.DataFrame:
         # TODO: write docstring.
@@ -77,13 +76,8 @@ class StEP:
             directions.append(direction)
         return directions
     
-    def compute_k_direction(self, poi: pd.DataFrame, k: int) -> pd.DataFrame:
-        # Compute the k-th direction. I think this can be combined into another function.
-        cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == k].index]
-        return self.compute_direction(poi, cluster_data)
-        
-    def compute_unnormalized_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
-        # TODO: write docstring.
+    def compute_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
+        #TODO: Zero out immutable features here, allow changes to dist function. docstring
         # Feedback: the distance metric we use is a hyperparameter/decision choice. 
         # As a future feature request, this should be changed to be passed as a parameter.
         diff = cluster_data.values - poi.values
@@ -94,16 +88,12 @@ class StEP:
         direction = diff.T @ alpha_val
         direction_df = poi.copy()
         direction_df.iloc[0] = pd.Series(direction)
-        return direction_df
-    
-    def compute_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
-        # TODO: write docstring.
-        direction = self.compute_unnormalized_direction(poi, cluster_data)
         if self.directions_rescaler == "normalize":
-                direction = direction / len(cluster_data)
+                direction_df = direction_df/len(cluster_data)
         elif self.directions_rescaler == "constant step size":
-            direction = self.constant_step_size(direction, self.step_size)
-        return direction
+            direction_df = self.constant_step_size(direction_df, self.step_size)
+        
+        return direction_df
 
     def compute_paths(self, poi: pd.DataFrame):
         # TODO: write docstring.
@@ -120,7 +110,8 @@ class StEP:
                 path.append(new_poi)
                 if self._model.predict(new_poi) == 1: 
                     break
-                drct = self.compute_k_direction(new_poi, k)
+                cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == k].index]
+                drct = self.compute_direction(poi, cluster_data)
             paths.append(path)
         return paths
 
