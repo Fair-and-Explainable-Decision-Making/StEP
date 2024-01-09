@@ -17,22 +17,26 @@ class StEP:
         model: model_interface.ModelInterface, max_iterations: int, 
         use_train_data: bool = True, confidence_threshold: Optional[float] = None, 
         random_seed: Optional[int] = None, step_size: Optional[float] = None,
-        normalize_directions: bool = True 
+        directions_rescaler: str = "normalize" 
     ):
         
+        if directions_rescaler == "constant step size" and step_size == None:
+            raise("Step size required for constant step size rescaler")
+        if directions_rescaler not in [None,"None","normalize","constant step size"]:
+            raise("Invalid direction rescaler")
         self.k_directions = k_directions
         self._model = model
         if use_train_data:
-            features, _, labels, _ = data_inter.get_split_data()
+            features, _, labels, _ = data_inter.get_train_test_split()
         else:
-            _, features, _, labels = data_inter.get_split_data()
+            _, features, _, labels = data_inter.get_train_test_split()
         self.processed_data = self._process_data(features, labels, confidence_threshold=confidence_threshold)
         self.clusters_assignments, self.cluster_centers = self._cluster_data(
                 self.processed_data, self.k_directions, random_seed=random_seed
             )
         self.step_size = step_size
         self.max_iterations = max_iterations
-        self.normalize_directions = normalize_directions
+        self.directions_rescaler = directions_rescaler
 
     #features, labels
     def _process_data(self, features: pd.DataFrame, labels: pd.Series, 
@@ -87,10 +91,11 @@ class StEP:
     
     def compute_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
         direction = self.compute_unnormalized_direction(poi, cluster_data)
-        if self.step_size:
-            direction = self.constant_step_size(direction, self.step_size)
-        if self.normalize_directions:
+        if self.directions_rescaler == "normalize":
                 direction = direction/len(cluster_data)
+        elif self.directions_rescaler == "constant step size":
+            direction = self.constant_step_size(direction, self.step_size)
+        
         return direction
 
     def compute_paths(self, poi: pd.DataFrame):
@@ -103,6 +108,7 @@ class StEP:
             for i in range(self.max_iterations):
                 new_poi = new_poi.add(drct, fill_value=0)
                 path.append(new_poi)
+                if self._model.predict(poi) == 1: break
                 drct = self.compute_k_direction(new_poi, k)
             paths.append(path)
         return paths
@@ -141,11 +147,12 @@ class StEPRecourse(RecourseInterface):
     """
     def __init__(self, model: model_interface.ModelInterface, data_interface: data_interface.DataInterface,
         num_clusters: int, max_iterations: int, use_train_data: bool = True,
-        confidence_threshold: Optional[float] = None, random_seed: Optional[int] = None, step_size = None
+        confidence_threshold: Optional[float] = None, random_seed: Optional[int] = None, step_size = None, 
+        directions_rescaler="normalize"
     ) -> None:
         
         self.StEP_instance = StEP(num_clusters, data_interface, model, max_iterations, use_train_data, 
-                                  confidence_threshold, random_seed, step_size)
+                                  confidence_threshold, random_seed, step_size, directions_rescaler)
     
     def get_counterfactuals(self, poi: pd.DataFrame) -> list:
         cfs = []

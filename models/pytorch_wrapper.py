@@ -28,7 +28,7 @@ class PyTorchModel:
     batch_size : int
         Number of samples for each batch.
     """
-    def __init__(self, model, criterion = nn.BCELoss(), lr = 1e-4, weight_decay = 1e-4, epochs = 5, batch_size=1):
+    def __init__(self, model, validation_features = None, validation_labels = None, criterion = nn.BCELoss(), lr = 1e-4, weight_decay = 1e-4, epochs = 5, batch_size=1):
         self._model = model
         self._criterion = criterion
         self._lr = lr
@@ -36,6 +36,15 @@ class PyTorchModel:
         self._epochs = epochs
         self._batch_size = batch_size
         
+        if validation_features is not None and validation_labels is not None:
+            if isinstance(validation_features, pd.DataFrame):
+                validation_features = validation_features.to_numpy()
+            if isinstance(validation_labels, pd.Series):
+                validation_labels = validation_labels.to_numpy()
+            tensor_features = torch.Tensor(validation_features)
+            tensor_labels = torch.Tensor(validation_labels.flatten())
+            valid_data = torch.utils.data.TensorDataset(tensor_features,tensor_labels)
+            self._validloader = torch.utils.data.DataLoader(valid_data, batch_size=self._batch_size)
 
     def fit(self, features, labels):
         """
@@ -59,15 +68,14 @@ class PyTorchModel:
         train_data = torch.utils.data.TensorDataset(tensor_features,tensor_labels)
         trainloader = torch.utils.data.DataLoader(train_data, batch_size=self._batch_size)
 
-        model = self._model
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        model = model.to(device)
+        model = self._model.to(device)
 
-        optimizer = optim.SGD(model.parameters(), lr=self._lr, weight_decay = self._weight_decay)
+        optimizer = optim.Adam(model.parameters(), lr=self._lr)
 
         for epoch in range(self._epochs):  # loop over the dataset multiple times
             running_loss = 0.0
-            for i, train_data in enumerate(trainloader, 0):
+            for i, train_data in enumerate(trainloader):
                 # get the inputs; data is a list of [inputs, target]
                 inputs, target = train_data
 
@@ -80,14 +88,17 @@ class PyTorchModel:
                 loss.backward()
                 optimizer.step()
 
-                # print statistics
                 running_loss += loss.item()
-                if i % 1000 == 999:    # print every 1000 mini-batches
-                    print(i)
-                    print('[%d, %5d] loss: %.3f' %
-                          (epoch + 1, i + 1, running_loss / 1000))
-                    running_loss = 0.0
 
+            running_vloss = 0.0
+            model.eval()
+            with torch.no_grad():
+                for i, valid_data in enumerate(self._validloader):
+                    vinputs, vtarget = valid_data
+                    voutputs = model(vinputs)
+                    vloss = self._criterion(voutputs, vtarget.unsqueeze(-1))
+                    running_vloss += vloss
+            print('EPOCH {} LOSS train {} valid {}'.format(epoch, running_loss/len(trainloader), running_vloss/len(self._validloader)))
         #print('Finished Training')
         self._model = model
         return self._model

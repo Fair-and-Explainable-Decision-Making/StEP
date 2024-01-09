@@ -11,7 +11,7 @@ class DiceRecourse(RecourseInterface):
         """
         self._model = model
         self._data_interface = data_interface
-        train_dataset, test_dataset, _, _ = data_interface.get_split_data() 
+        train_dataset, test_dataset, _, _ = data_interface.get_train_test_split() 
         self._dice_data = dice_ml.Data(
             dataframe=train_dataset,
             continuous_features=data_interface.continuous_features(),
