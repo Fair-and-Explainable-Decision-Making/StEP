@@ -67,14 +67,14 @@ class StEP:
         cluster_centers = km.cluster_centers_
         return cluster_assignments_df, cluster_centers
     
-    def compute_all_directions(self, poi: pd.DataFrame) -> Sequence:
+    def compute_all_directions(self, poi: pd.DataFrame) -> pd.DataFrame:
         # TODO: write docstring.
         directions = []
         for cluster_index in range(self.k_directions):
             cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == cluster_index].index]
             direction = self.compute_direction(poi, cluster_data)
             directions.append(direction)
-        return directions
+        return pd.concat(directions)
     
     def compute_direction(self, poi: pd.DataFrame, cluster_data: pd.DataFrame) -> pd.DataFrame:
         #TODO: Zero out immutable features here, allow changes to dist function. docstring
@@ -95,16 +95,14 @@ class StEP:
         
         return direction_df
 
-    def compute_paths(self, poi: pd.DataFrame):
+    def compute_all_paths(self, poi: pd.DataFrame) -> list:
         # TODO: write docstring.
         # TODO: please consider parallelizing this / avoiding looping over the directions
         # on a per-PoI basis. This will be the big computational bottleneck.
-        paths = []
-        directions = self.compute_all_directions(poi)
-        for k, d in enumerate(directions):
+        def compute_path(d, poi):
             new_poi = poi.copy()
             path = [new_poi]
-            drct = d.copy()
+            drct = d.to_frame().T
             for i in range(self.max_iterations):
                 new_poi = new_poi.add(drct, fill_value=0)
                 path.append(new_poi)
@@ -112,8 +110,10 @@ class StEP:
                     break
                 cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == k].index]
                 drct = self.compute_direction(poi, cluster_data)
-            paths.append(path)
-        return paths
+            return path
+        directions = self.compute_all_directions(poi)
+        directions["path"] = directions.apply(lambda d: compute_path(d, poi), axis=1)
+        return directions["path"].values
 
     def volcano_alpha(self, dist: np.ndarray, cutoff=0.5, degree=2) -> np.ndarray:
         return 1 / np.where(dist <= cutoff, cutoff, dist) ** degree
@@ -155,12 +155,12 @@ class StEPRecourse(RecourseInterface):
     def get_counterfactuals(self, poi: pd.DataFrame) -> Sequence:
         # TODO: write docstring.
         cfs = []
-        paths = self.StEP_instance.compute_paths(poi)
+        paths = self.StEP_instance.compute_all_paths(poi)
         for p in paths:
             cfs.append(p[-1])
         return cfs
 
     def get_paths(self, poi: pd.DataFrame) -> Sequence:
         # TODO: write docstring.
-        return self.StEP_instance.compute_paths(poi)
+        return self.StEP_instance.compute_all_paths(poi)
     
