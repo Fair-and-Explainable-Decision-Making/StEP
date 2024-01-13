@@ -10,7 +10,8 @@ class DataInterface():
                 ordinal_features: Sequence[str], categorical_features: Sequence[str], immutable_features: Sequence[str],
                 target_feature: str, target_mapping: Any = None, scaling_method: str = "MinMax", encoding_method: str = "OneHot",
                 pos_label: int = 1, file_header_row: int = 0, dropped_columns: list = [],
-                unidirection_features: (Sequence[str],Sequence[str]) = ([],[])
+                unidirection_features: (Sequence[str],Sequence[str]) = ([],[]),
+                feature_orders: dict = {}
                 ):
         """
         Creates a data interface with the specified, continuous features, ordinal features, and categorical features.
@@ -36,13 +37,20 @@ class DataInterface():
         target_mapping : Any
             A mapping of the target features to some values
         scaling_method : str
-            String indicating how you with to scale your data. Options are MaxMin normalization and standardization 
+            String indicating how you with to scale your data. 
+            Options are MaxMin normalization and standardization. 
         encoding_method : str
             Encoding method for categorical features. Only one-hot for now.
         file_header_row : int
             Row the headers are on when a file and its path is given for reading.
         dropped_columns : list
             List of columns to drop from the dataset.
+        unidirection_features: (Sequence[str],Sequence[str])
+            Tuple of two lists. 1st list are features that only decrease 
+            and 2nd list are for those that only increase.
+        feature_orders: dict
+            Dictionary of keys representing feature names and 
+            (dict)values as a list representing the order of the feature's values.
         """
         self._continuous_features = continuous_features
         self._ordinal_features =  ordinal_features
@@ -53,8 +61,7 @@ class DataInterface():
         self._scaling_method = scaling_method
         self._encoding_method = encoding_method
         self._file_path = file_path
-        import os
-        print(os.getcwd())
+        
         if (file_path is None or file_path == "") and isinstance(data, pd.DataFrame):
             df = data
         elif file_path is not None and file_path != "" and file_path.endswith(".csv"):
@@ -80,7 +87,9 @@ class DataInterface():
             d2 = {pos_label: 1}
             target_mapping = {**d1, **d2}
         df[target_feature] = df[target_feature].map(target_mapping)
-        
+        for feat_name, value_order in feature_orders.items():
+            feat_mapping = {k: v for v, k in enumerate(value_order)}
+            df[feat_name] = df[feat_name].map(feat_mapping)
         self._labels_df = df[self._target_feature]
         self._features_df = df[df.columns[df.columns != target_feature]]
         
@@ -99,7 +108,6 @@ class DataInterface():
         features_train, features_valid, features_test, labels_train, labels_valid, labels_test: tuple
             Dataframes of non-target and target features seperated also split into training, validation, and testing data.
         """
-        #TODO: add validation split
         self._features_train, self._features_test, self._labels_train, self._labels_test = train_test_split(
             self._features_df, self._labels_df, test_size=validation_size+test_size, random_state=42)
         test_ratio = test_size/(validation_size+test_size)
@@ -165,7 +173,9 @@ class DataInterface():
             raise Exception("One of your splits are None")
 
     def get_scaler(self):
-        #TODO: docstring
+        """
+        Returns the scaler if it has been created and fit for the data.
+        """
         if self._scaler is not None:
             return self._scaler
         else:
