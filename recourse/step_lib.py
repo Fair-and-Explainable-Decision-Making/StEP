@@ -74,6 +74,7 @@ class StEP:
         for cluster_index in range(self.k_directions):
             cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == cluster_index].index]
             direction = self.compute_direction(poi, cluster_data)
+            direction["cluster_index"] = cluster_index
             directions.append(direction)
         return pd.concat(directions)
     
@@ -112,6 +113,8 @@ class StEP:
         # TODO: please consider parallelizing this / avoiding looping over the directions
         # on a per-PoI basis. This will be the big computational bottleneck.
         def compute_path(d, poi):
+            cluster_index = d["cluster_index"]
+            d = d.drop(labels="cluster_index")
             new_poi = poi.copy()
             path = [new_poi]
             drct = d.to_frame().T
@@ -120,7 +123,7 @@ class StEP:
                 path.append(new_poi)
                 if self._model.predict(new_poi) == 1: 
                     break
-                cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == k].index]
+                cluster_data = self.processed_data.loc[self.clusters_assignments[self.clusters_assignments["datapoint_cluster"] == cluster_index].index]
                 drct = self.compute_direction(poi, cluster_data)
             return path
         directions = self.compute_all_directions(poi)
