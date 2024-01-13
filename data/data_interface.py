@@ -9,7 +9,9 @@ class DataInterface():
     def __init__(self, data: pd.DataFrame, file_path: str, continuous_features: Sequence[str],
                 ordinal_features: Sequence[str], categorical_features: Sequence[str], immutable_features: Sequence[str],
                 target_feature: str, target_mapping: Any = None, scaling_method: str = "MinMax", encoding_method: str = "OneHot",
-                pos_label: int = 1, file_header_row: int = 0, dropped_columns: list = []):
+                pos_label: int = 1, file_header_row: int = 0, dropped_columns: list = [],
+                unidirection_features: (Sequence[str],Sequence[str]) = ([],[])
+                ):
         """
         Creates a data interface with the specified, continuous features, ordinal features, and categorical features.
 
@@ -64,7 +66,7 @@ class DataInterface():
             raise Exception("No data and valid file path provided")
         self.dataset = df.copy()
         self._pos_label = pos_label
-        
+        self._unidirection_features = unidirection_features
 
         """
         Necessary preprocessing for dropping undesired columns and mapping 
@@ -82,7 +84,7 @@ class DataInterface():
         self._labels_df = df[self._target_feature]
         self._features_df = df[df.columns[df.columns != target_feature]]
         
-    def split_data(self, validation_size:float = 0.15, test_size: float = 0.15) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]:
+    def split_data(self, validation_size:float = 0.15, test_size: float = 0.15) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]:
         """
         Splits data into X and y and train and test data. Should be used as the last step when setting up data.
 
@@ -94,7 +96,7 @@ class DataInterface():
             Between 0.0 and 1.0 and represents the proportion of the dataset to include in the test split.
         Returns
         -------
-        features_train, features_valid, features_test, labels_train, labels_valid, labels_test: Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]
+        features_train, features_valid, features_test, labels_train, labels_valid, labels_test: tuple
             Dataframes of non-target and target features seperated also split into training, validation, and testing data.
         """
         #TODO: add validation split
@@ -118,13 +120,13 @@ class DataInterface():
             Dataframe of scaled data.
         """
         if self._scaling_method == "MinMax":
-            scaler = MinMaxScaler()
+            self._scaler = MinMaxScaler()
         elif self._scaling_method == "Standard":
-            scaler = StandardScaler()
+            self._scaler = StandardScaler()
         else:
             return self._features_df
         #in classification we don't want to scale the target column
-        scaled = scaler.fit_transform(self._features_df) 
+        scaled = self._scaler.fit_transform(self._features_df) 
         self._features_df = pd.DataFrame(scaled, columns=self._features_df.columns,index=self._features_df.index)
         return self._features_df
 
@@ -162,6 +164,12 @@ class DataInterface():
         else:
             raise Exception("One of your splits are None")
 
+    def get_scaler(self):
+        #TODO: docstring
+        if self._scaler is not None:
+            return self._scaler
+        else:
+            raise Exception("You have not scaled your data.")
     @property
     def categorical_features(self) -> Sequence[str]:
         return self._categorical_features
@@ -185,6 +193,10 @@ class DataInterface():
     @property
     def pos_label(self) -> int:
         return self._pos_label
+    
+    @property
+    def unidirection_features(self) -> (Sequence[str], Sequence[str]):
+        return self._unidirection_features
     
     def copy_change_data(self, data: pd.DataFrame):
         return DataInterface(data, self._file_path, self._continuous_features, self._ordinal_features,

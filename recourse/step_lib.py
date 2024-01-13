@@ -37,6 +37,7 @@ class StEP:
         self.step_size = step_size
         self.max_iterations = max_iterations
         self.directions_rescaler = directions_rescaler
+        self._data_inter = data_inter
 
     def _process_data(self, features: pd.DataFrame, labels: pd.Series, 
                       confidence_threshold: Optional[float] = None) -> pd.DataFrame:
@@ -80,6 +81,8 @@ class StEP:
         #TODO: Zero out immutable features here, allow changes to dist function. docstring
         # Feedback: the distance metric we use is a hyperparameter/decision choice. 
         # As a future feature request, this should be changed to be passed as a parameter.
+        cluster_data[self._data_inter.immutable_features] = 0
+        poi[self._data_inter.immutable_features] = 0
         diff = cluster_data.values - poi.values
         dist = np.sqrt(np.power(diff, 2).sum(axis=1))
         alpha_val = self.volcano_alpha(dist)
@@ -89,10 +92,19 @@ class StEP:
         direction_df = poi.copy()
         direction_df.iloc[0] = pd.Series(direction)
         if self.directions_rescaler == "normalize":
-                direction_df = direction_df/len(cluster_data)
+            direction_df = direction_df/len(cluster_data)
         elif self.directions_rescaler == "constant step size":
             direction_df = self.constant_step_size(direction_df, self.step_size)
-        
+        direction_df.loc[direction_df[self._data_inter.unidirection_features[0]] > 0] = 0
+        direction_df.loc[direction_df[self._data_inter.unidirection_features[1]] < 0] = 0 
+        if len(self._data_inter.categorical_features)>0:
+            try:
+                data_interface_scaler = self._data_inter.get_scaler()
+            except:
+                return direction_df 
+            scaled_direction_df = data_interface_scaler.inverse_transform(direction_df)
+            scaled_direction_df[self._data_inter.categorical_features] = scaled_direction_df[self._data_inter.categorical_features].round()
+            direction_df = data_interface_scaler.transform(scaled_direction_df)
         return direction_df
 
     def compute_all_paths(self, poi: pd.DataFrame) -> list:
