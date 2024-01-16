@@ -78,13 +78,14 @@ class PyTorchModel:
             for i, train_data in enumerate(trainloader):
                 # get the inputs; data is a list of [inputs, target]
                 inputs, target = train_data
-
+                inputs = inputs.to(device)
+                target = torch.nn.functional.one_hot(target.to(device).type(torch.int64), num_classes=2)
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
                 # forward + backward + optimize
                 outputs = model(inputs)
-                loss = self._criterion(outputs, target.unsqueeze(-1))
+                loss = self._criterion(outputs, target.float())
                 loss.backward()
                 optimizer.step()
 
@@ -95,11 +96,12 @@ class PyTorchModel:
             with torch.no_grad():
                 for i, valid_data in enumerate(self._validloader):
                     vinputs, vtarget = valid_data
+                    vinputs = inputs.to(device)
+                    vtarget = torch.nn.functional.one_hot(vtarget.to(device).type(torch.int64), num_classes=2)
                     voutputs = model(vinputs)
-                    vloss = self._criterion(voutputs, vtarget.unsqueeze(-1))
+                    vloss = self._criterion(voutputs, vtarget.float())
                     running_vloss += vloss
             print('EPOCH {} LOSS train {} valid {}'.format(epoch, running_loss/len(trainloader), running_vloss/len(self._validloader)))
-        #print('Finished Training')
         self._model = model
         return self._model
 
@@ -142,5 +144,11 @@ class PyTorchModel:
         (out > 0.5) : np.ndarray
             Array of binary outcomes.
         """
-        out = self.predict_proba(features)[:, 0]
+        out = self.predict_proba(features)[:, 1]
         return np.array(out > 0.5, dtype=np.int32)
+    
+    def get_model(self):
+        """
+        Returns the model used by the interface.
+        """
+        return self._model

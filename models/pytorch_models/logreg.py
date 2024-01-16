@@ -12,7 +12,7 @@ class LogisticRegression(nn.Module):
     num_classes : int
         Number of unque labels/classes for the data. 
     """
-    def __init__(self, num_features: int, num_classes: int = 1):
+    def __init__(self, num_features: int, num_classes: int = 2):
         super(LogisticRegression, self).__init__()
         self.linear = nn.Linear(num_features, num_classes)
 

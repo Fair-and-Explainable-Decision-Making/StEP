@@ -3,6 +3,8 @@ from typing import Sequence, Any, Tuple
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import numpy as np
+import itertools
+import re
 
 #TODO: if binary labels set to 0 or 1, also allow for flipping if necessary between pos and neg labels to match our convention
 class DataInterface():
@@ -11,7 +13,7 @@ class DataInterface():
                 target_feature: str, target_mapping: Any = None, scaling_method: str = "MinMax", encoding_method: str = "OneHot",
                 pos_label: int = 1, file_header_row: int = 0, dropped_columns: list = [],
                 unidirection_features: (Sequence[str],Sequence[str]) = ([],[]),
-                feature_orders: dict = {}
+                ordinal_features_order: dict = {}
                 ):
         """
         Creates a data interface with the specified, continuous features, ordinal features, and categorical features.
@@ -48,8 +50,8 @@ class DataInterface():
         unidirection_features: (Sequence[str],Sequence[str])
             Tuple of two lists. 1st list are features that only decrease 
             and 2nd list are for those that only increase.
-        feature_orders: dict
-            Dictionary of keys representing feature names and 
+        ordinal_features_order: dict
+            Dictionary of keys representing ordinal feature names and 
             (dict)values as a list representing the order of the feature's values.
         """
         self._continuous_features = continuous_features
@@ -74,6 +76,10 @@ class DataInterface():
         self.dataset = df.copy()
         self._pos_label = pos_label
         self._unidirection_features = unidirection_features
+        if (list(set(unidirection_features[0]) & set(categorical_features))
+            or list(set(unidirection_features[1]) & set(categorical_features))):
+            raise Exception("""Categorical features cannot be unidirectional.
+                            Did you mean to make it ordinal?""")
 
         """
         Necessary preprocessing for dropping undesired columns and mapping 
@@ -87,11 +93,17 @@ class DataInterface():
             d2 = {pos_label: 1}
             target_mapping = {**d1, **d2}
         df[target_feature] = df[target_feature].map(target_mapping)
-        for feat_name, value_order in feature_orders.items():
+        ordinal_features_list = ordinal_features.copy()
+        for feat_name, value_order in ordinal_features_order.items():
+            ordinal_features_list.remove(feat_name)
             feat_mapping = {k: v for v, k in enumerate(value_order)}
             df[feat_name] = df[feat_name].map(feat_mapping)
+        if ordinal_features_list:
+            raise Exception("The following ordinal features", ordinal_features_list,
+                            "did not have an ordering given.")
         self._labels_df = df[self._target_feature]
         self._features_df = df[df.columns[df.columns != target_feature]]
+        self._feature_columns = df.columns[df.columns != target_feature]
         
     def split_data(self, validation_size:float = 0.15, test_size: float = 0.15) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame ,pd.DataFrame]:
         """
@@ -148,8 +160,10 @@ class DataInterface():
             Dataframe of features data after one-hot encoding.
         """ 
         if self._encoding_method == "OneHot":
-            self._features_df = pd.get_dummies(self._features_df, columns = self._categorical_features) 
-        return self._features_df
+            self._features_df = pd.get_dummies(self._features_df, columns = self._categorical_features,drop_first=True) 
+        encoded_cat_feats = self._features_df.columns.intersection(self._features_df.columns.symmetric_difference(self._feature_columns))
+        self._encoded_categorical_feats={k: list(v)for k,v in itertools.groupby(encoded_cat_feats ,key=lambda x:re.match('(.*)(_[^_]+)', x).group(1))}
+        return self._features_df 
 
     def get_data(self):
         """
@@ -160,7 +174,7 @@ class DataInterface():
         pd.concat[self._features_df, self._labels_df] : pd.DataFrame
             Dataframe of potentially scaled and encoded data with features and labels.
         """
-        return pd.concat[self._features_df, self._labels_df]
+        return pd.concat([self._features_df, self._labels_df], axis = 1)
     
     def get_train_test_split(self):
         """
@@ -180,6 +194,20 @@ class DataInterface():
             return self._scaler
         else:
             raise Exception("You have not scaled your data.")
+    
+    def get_encoded_categorical_feats(self) ->dict:
+        """
+        Returns a dict of original column name to list of encoded column names mappings.
+        """
+        if self._encoded_categorical_feats is not None:
+            return self._encoded_categorical_feats
+        else:
+            raise Exception("You have not encoded your data.")
+
+    @property
+    def features(self) -> Sequence[str]:
+        return self._feature_columns
+    
     @property
     def categorical_features(self) -> Sequence[str]:
         return self._categorical_features

@@ -55,7 +55,7 @@ class ModelInterface():
         """
         return self._model.predict(features)
 
-    def predict_proba(self, features: DATA_TYPES) -> np.ndarray:
+    def predict_proba(self, features: DATA_TYPES, pos_label_only: bool = False) -> np.ndarray:
         """
         Uses model's predict probability function for the probability estimate
         for the positive class.
@@ -64,20 +64,24 @@ class ModelInterface():
         ----------
         features : Union[np.ndarray, pd.DataFrame, torch.Tensor]
             A tabular data object with the features and samples used for inference.
+        pos_label_only: bool
+            True if you want a n x 1 probability estimates for positive class only for binary.
         Returns
         -------
         model.predict_proba(features) : np.ndarray
-            Array of positive probability estimates.
+            Array of probability estimates.
         """
         pred = self._model.predict_proba(features)
-        if isinstance(self._model, sklearn.base.BaseEstimator):
+        if pos_label_only:
             return np.array(pred[:,1]).reshape(-1,1)
-        elif isinstance(self._model, PyTorchModel):
-            return pred
+        return pred
 
-    def get_model(self) -> str:
+    def get_model(self):
         """
         Returns the model used by the interface.
         """
-        return self._model
+        if isinstance(self._model, sklearn.base.BaseEstimator):
+            return self._model
+        elif isinstance(self._model, PyTorchModel):
+            return self._model.get_model()
     

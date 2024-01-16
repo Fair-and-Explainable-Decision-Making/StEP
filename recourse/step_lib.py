@@ -45,7 +45,7 @@ class StEP:
         
         positive_data = features.loc[labels[labels == 1].index]
         if confidence_threshold:
-            probs = self._model.predict_proba(positive_data.values)
+            probs = self._model.predict_proba(positive_data.values, pos_label_only=True)
             positive_confident_df = pd.Series(probs.flatten(), index=positive_data.index)
             positive_confident_df = positive_confident_df[positive_confident_df >= confidence_threshold]
         if len(positive_confident_df) == 0:
@@ -82,8 +82,15 @@ class StEP:
         #TODO: Zero out immutable features here, allow changes to dist function. docstring
         # Feedback: the distance metric we use is a hyperparameter/decision choice. 
         # As a future feature request, this should be changed to be passed as a parameter.
-        cluster_data[self._data_inter.immutable_features] = 0
-        poi[self._data_inter.immutable_features] = 0
+        immutable_feats = self._data_inter.immutable_features.copy()
+        if self._data_inter.categorical_features and immutable_feats:
+            for feat_name, one_hot_feat_names in self._data_inter.get_encoded_categorical_feats().items():
+                if feat_name in self._data_inter.immutable_features:
+                    cluster_data[one_hot_feat_names] = 0
+                    poi[one_hot_feat_names] = 0
+                    immutable_feats.remove(feat_name)
+        cluster_data[immutable_feats] = 0
+        poi[immutable_feats] = 0
         diff = cluster_data.values - poi.values
         dist = np.sqrt(np.power(diff, 2).sum(axis=1))
         alpha_val = self.volcano_alpha(dist)
@@ -98,14 +105,19 @@ class StEP:
             direction_df = self.constant_step_size(direction_df, self.step_size)
         direction_df.loc[direction_df[self._data_inter.unidirection_features[0]] > 0] = 0
         direction_df.loc[direction_df[self._data_inter.unidirection_features[1]] < 0] = 0 
-        if len(self._data_inter.categorical_features)>0:
+        if self._data_inter.ordinal_features:
             try:
                 data_interface_scaler = self._data_inter.get_scaler()
+                scaled_direction_df = data_interface_scaler.inverse_transform(direction_df)
+                scaled_direction_df[self._data_inter.ordinal_features] = scaled_direction_df[self._data_inter.ordinal_features].round()
+                direction_df = data_interface_scaler.transform(scaled_direction_df)
             except:
-                return direction_df 
-            scaled_direction_df = data_interface_scaler.inverse_transform(direction_df)
-            scaled_direction_df[self._data_inter.categorical_features] = scaled_direction_df[self._data_inter.categorical_features].round()
-            direction_df = data_interface_scaler.transform(scaled_direction_df)
+                direction_df[self._data_inter.ordinal_features]= direction_df[self._data_inter.ordinal_features].round()
+        if self._data_inter.categorical_features:
+            for feat_name, one_hot_feat_names in self._data_inter.get_encoded_categorical_feats().items():
+                one_hot_feats_constrained = np.zeros_like(direction_df[one_hot_feat_names].values)
+                one_hot_feats_constrained[np.arange(len(direction_df[one_hot_feat_names])), direction_df[one_hot_feat_names].values.argmax(1)] = 1
+                direction_df[one_hot_feat_names] = one_hot_feats_constrained
         return direction_df
 
     def compute_all_paths(self, poi: pd.DataFrame) -> list:

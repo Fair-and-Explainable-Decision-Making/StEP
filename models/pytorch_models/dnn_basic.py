@@ -17,7 +17,7 @@ class BaselineDNN(nn.Module):
         super(BaselineDNN, self).__init__()
         self.fc1 = nn.Linear(num_features, 16)
         self.fc2 = nn.Linear(16, 32)
-        self.fc3 = nn.Linear(32, 1)
+        self.fc3 = nn.Linear(32, 2)
         self.relu = nn.ReLU()
 
     def forward(self, features):
