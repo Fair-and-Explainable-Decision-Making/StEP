@@ -1,12 +1,13 @@
 import pandas as pd
 from typing import Union
-import sklearn 
+import sklearn
 import numpy as np
 import torch
 
 from models.pytorch_wrapper import PyTorchModel
 
-DATA_TYPES= Union[np.ndarray, pd.DataFrame, torch.Tensor]
+DATA_TYPES = Union[np.ndarray, pd.DataFrame, torch.Tensor]
+
 
 class ModelInterface():
     """
@@ -18,9 +19,10 @@ class ModelInterface():
     model : Union[sklearn.base.BaseEstimator, PyTorchModel]
         model to be used
     """
+
     def __init__(self, model: Union[sklearn.base.BaseEstimator, PyTorchModel]):
         self._model = model
-        if not (isinstance(self._model, sklearn.base.BaseEstimator) 
+        if not (isinstance(self._model, sklearn.base.BaseEstimator)
                 or isinstance(self._model, PyTorchModel)):
             raise Exception("Invalid model backend")
 
@@ -38,7 +40,7 @@ class ModelInterface():
         if isinstance(self._model, sklearn.base.BaseEstimator):
             labels = np.ravel(labels)
         self._model.fit(features, labels)
-    
+
     def predict(self, features: DATA_TYPES) -> np.ndarray:
         """
         Uses model's predict function to make binary decisions. Threshold for binary decision
@@ -73,7 +75,7 @@ class ModelInterface():
         """
         pred = self._model.predict_proba(features)
         if pos_label_only:
-            return np.array(pred[:,1]).reshape(-1,1)
+            return np.array(pred[:, 1]).reshape(-1, 1)
         return pred
 
     def get_model(self):
@@ -84,4 +86,3 @@ class ModelInterface():
             return self._model
         elif isinstance(self._model, PyTorchModel):
             return self._model.get_model()
-    

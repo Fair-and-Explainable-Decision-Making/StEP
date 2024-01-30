@@ -13,6 +13,7 @@ class BaselineDNN(nn.Module):
     num_classes : int
         Number of unque labels/classes for the data. 
     """
+
     def __init__(self, num_features: int, num_classes: int = 1):
         super(BaselineDNN, self).__init__()
         self.fc1 = nn.Linear(num_features, 16)

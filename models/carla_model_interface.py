@@ -1,7 +1,7 @@
 from carla import MLModel
 import pandas as pd
 from typing import Union
-import sklearn 
+import sklearn
 import numpy as np
 import torch
 from data.data_interface import DataInterface
@@ -10,6 +10,8 @@ from model_interface import ModelInterface
 from models.pytorch_wrapper import PyTorchModel
 # Custom black-box models need to inherit from
 # the MLModel interface
+
+
 class CarlaModelInterface(MLModel):
     def __init__(self, model_interface: ModelInterface, data_carla, data_interface: DataInterface):
         super().__init__(data_carla)
