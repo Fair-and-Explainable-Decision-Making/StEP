@@ -2,7 +2,7 @@ from dice_ml import Data
 from models.model_interface import ModelInterface
 from data.data_interface import DataInterface
 import pandas as pd
-from recourse_interface import RecourseInterface
+from recourse.recourse_interface import RecourseInterface
 from recourse.step_lib import StEP, StEPRecourse
 from recourse.dice_recourse import DiceRecourse
 from recourse.face_recourse import FACERecourse

@@ -1,4 +1,4 @@
-from data_interface import DataInterface
+from data.data_interface import DataInterface
 import pandas as pd
 from aif360.sklearn.datasets import fetch_adult
 

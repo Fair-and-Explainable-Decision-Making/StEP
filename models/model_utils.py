@@ -6,7 +6,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 
 
-def get_model_interface_by_name(model_name: str, **kwargs) -> ModelInterface:
+def get_model_interface_by_name(**kwargs) -> ModelInterface:
+    model_name = kwargs["name"]
     if model_name == "BaselineDNN":
         model = PyTorchModel(BaselineDNN(kwargs['feats_train'].shape[1]), validation_features=kwargs['feats_valid'],
                              validation_labels=kwargs['labels_valid'], batch_size=kwargs['batch_size'], epochs=kwargs['epochs'], lr=kwargs['lr'])
