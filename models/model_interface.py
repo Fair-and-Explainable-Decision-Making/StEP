@@ -41,10 +41,10 @@ class ModelInterface():
             labels = np.ravel(labels)
         self._model.fit(features, labels)
 
-    def predict(self, features: DATA_TYPES) -> np.ndarray:
+    def predict(self, features: DATA_TYPES, confidence_threshold = 0.5) -> np.ndarray:
         """
-        Uses model's predict function to make binary decisions. Threshold for binary decision
-        is 0.50.
+        Uses model's predict/predictproba function to make binary decisions. Threshold for binary decision
+        is 0.50 by default.
 
         Parameters
         ----------
@@ -55,7 +55,10 @@ class ModelInterface():
         model.predict(features) : np.ndarray
             Array of binary outcomes.
         """
-        return self._model.predict(features)
+        if confidence_threshold == 0.5:
+            return self._model.predict(features)
+        out = self.predict_proba(features)[:, 1]
+        return np.array(out >= confidence_threshold, dtype=np.int32)
 
     def predict_proba(self, features: DATA_TYPES, pos_label_only: bool = False) -> np.ndarray:
         """

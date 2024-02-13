@@ -20,7 +20,7 @@ import time
 import multiprocessing
 from data.dataset_utils import get_dataset_interface_by_name
 from models.model_utils import get_model_interface_by_name
-from recourse.recourse_utils import get_recourse_interface_by_name
+from recourse.utils.recourse_utils import get_recourse_interface_by_name
 
 
 def run_experiments(arguments):
@@ -36,6 +36,7 @@ def run_experiments(arguments):
     model_interface.fit(feats_train, labels_train)
     preds = pd.Series(model_interface.predict(feats_test), index=feats_test.index)
     neg_data = feats_test.loc[preds[preds != 1].index]
+    #TODO: change this to output to a text file or something similar
     for score in classifier_metrics.run_classifier_tests(labels_test, model_interface.predict(feats_test)):
         print(score)
 
@@ -55,15 +56,20 @@ def run_experiments(arguments):
 
 def generate_recourse_results(poi, recourse_interface, model_interface):
     poi = poi.to_frame().T
-    cfs = recourse_interface.get_counterfactuals(poi)
     paths = recourse_interface.get_paths(poi)
-
+    cfs = recourse_interface.get_counterfactuals_from_paths(paths)
+    
     l2_path_len = []
     l2_prox = []
     l2_path_steps = []
     failures = []
     for i, p in enumerate(paths):
-        if model_interface.predict(p[-1]) == 1:
+        if not p or model_interface.predict(p[-1]) == 0:
+            failures.append(1)
+            l2_path_len.append(np.nan)
+            l2_prox.append(np.nan)
+            l2_path_steps.append(np.nan)
+        elif model_interface.predict(p[-1]) == 1 and p:
             l2_path_len.append(recourse_metrics.compute_norm_path(p, 2))
             l2_prox.append(recourse_metrics.compute_norm(poi, p[-1], ord=2))
             l2_path_steps.append(len(p[1:]))
@@ -76,5 +82,18 @@ def generate_recourse_results(poi, recourse_interface, model_interface):
 
 
 if __name__ == "__main__":
-    run_experiments()
-    #use df.to_latex
+    #argugement = your dict
+    #TODO: give names for util files that can go in here
+    arguments = {
+        "dataset name": "credit default",
+        "dataset encoded" : True,
+        "dataset scaler" : True,
+        "dataset valid-test split" : [15,15],
+        "model name" : "LogisticRegressionSK",
+        "recourse methods" : ["FACE","StEP","DiCE"]
+
+
+    }
+    run_experiments(arguments)
+
+    #TODO: use df.to_latex

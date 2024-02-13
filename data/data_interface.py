@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import Sequence, Any, Tuple
+from typing import Sequence, Any, Tuple, List
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import numpy as np
@@ -16,8 +16,7 @@ class DataInterface():
                  ordinal_features: Sequence[str], categorical_features: Sequence[str], immutable_features: Sequence[str],
                  target_feature: str, target_mapping: Any = None, encoding_method: str = "OneHot",
                  pos_label: int = 1, file_header_row: int = 0, dropped_columns: list = [],
-                 unidirection_features: (
-                     Sequence[str], Sequence[str]) = ([], []),
+                 unidirection_features: List[Sequence[str]] = ([], []),
                  ordinal_features_order: dict = {}
                  ):
         """
@@ -192,11 +191,12 @@ class DataInterface():
         self._encoded_categorical_feats_dict = {k: list(v)for k, v in itertools.groupby(
             encoded_cat_feats, key=lambda x: re.match('(.*)(_[^_]+)', x).group(1))}
         
-        self._encoded_immutable_categorical_features = []
+        self._encoded_immutable_features = self._immutable_features.copy()
         for feat_name, one_hot_feat_names in self.get_encoded_categorical_feats().items():
                 if feat_name in self._immutable_features:
+                    self._encoded_immutable_features.remove(feat_name)
                     for name in one_hot_feat_names:
-                        self._encoded_immutable_categorical_features.append(name)
+                        self._encoded_immutable_features.append(name)
         return self._features_df
 
     def get_data(self):
@@ -241,9 +241,9 @@ class DataInterface():
         else:
             return None
     
-    def get_processed_immutable_cat_feats(self) -> list:
-        if self._encoded_immutable_categorical_features is not None:
-            return self._encoded_immutable_categorical_features
+    def get_processed_immutable_feats(self) -> list:
+        if self._encoded_immutable_features is not None:
+            return self._encoded_immutable_features
         else:
             return self._immutable_features
 
@@ -291,7 +291,7 @@ class DataInterface():
         return self._pos_label
 
     @property
-    def unidirection_features(self) -> (Sequence[str], Sequence[str]):
+    def unidirection_features(self) -> List[Sequence[str]]:
         return self._unidirection_features
 
     def copy_change_data(self, data: pd.DataFrame):

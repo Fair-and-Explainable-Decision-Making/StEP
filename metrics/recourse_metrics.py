@@ -12,7 +12,7 @@ def compute_norm(poi1: pd.DataFrame, poi2: pd.DataFrame,
     """
     if ord == 0:
         return (np.abs(poi1 - poi2) > sparsity_epsilon).values.sum()
-    return np.linalg.norm(poi1-poi2, ord=ord)
+    return np.linalg.norm(poi1.values-poi2.values, ord=ord)
 
 
 def compute_norm_path(path: list, ord: Union[float, int]) -> float:

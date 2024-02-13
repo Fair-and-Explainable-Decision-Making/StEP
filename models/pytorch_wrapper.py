@@ -154,7 +154,7 @@ class PyTorchModel:
             Array of binary outcomes.
         """
         out = self.predict_proba(features)[:, 1]
-        return np.array(out > 0.5, dtype=np.int32)
+        return np.array(out >= 0.5, dtype=np.int32)
 
     def get_model(self):
         """

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 import numpy as np
 from models import model_interface
 from data import data_interface
@@ -64,7 +64,7 @@ class StEP:
         return features.loc[positive_confident_df.index]
 
     def _cluster_data(self, data: pd.DataFrame, k_directions: int,
-                      random_seed: Optional[int] = None) -> (pd.DataFrame, np.ndarray):
+                      random_seed: Optional[int] = None) -> Tuple[pd.DataFrame, np.ndarray]:
         # TODO: write docstring.
 
         km = KMeans(n_clusters=k_directions, random_state=random_seed)
@@ -92,7 +92,7 @@ class StEP:
         # TODO: Zero out immutable features here, allow changes to dist function. docstring
         # Feedback: the distance metric we use is a hyperparameter/decision choice.
         # As a future feature request, this should be changed to be passed as a parameter.
-        immutable_feats = self._data_interface.get_processed_immutable_cat_feats()
+        immutable_feats = self._data_interface.get_processed_immutable_feats()
         cluster_data_filtered = cluster_data.copy()
         cluster_data_filtered[immutable_feats] = 0
         poi[immutable_feats] = 0
@@ -113,8 +113,7 @@ class StEP:
             direction_df = self.constant_step_size(
                 direction_df, self.step_size)
         
-        direction_df[direction_df[self._data_interface.unidirection_features[0]] > 0] = 0
-        direction_df[direction_df[self._data_interface.unidirection_features[1]] < 0] = 0
+        
         if self._data_interface.ordinal_features:
             if self._data_interface.get_scaler():
                 cols_to_scale = self._data_interface.ordinal_features
@@ -129,7 +128,8 @@ class StEP:
                 direction_df[cols_to_scale] = data_interface_scaler.transform(scaled_direction_df)"""
             else:
                 direction_df[self._data_interface.ordinal_features] = direction_df[self._data_interface.ordinal_features].round()
-        
+        direction_df[direction_df[self._data_interface.unidirection_features[0]] > 0] = 0
+        direction_df[direction_df[self._data_interface.unidirection_features[1]] < 0] = 0
         #noise for experiments
         if noise:
             direction_df = self.randomly_perturb_direction(direction_df,noise,immutable_feats)
@@ -156,7 +156,7 @@ class StEP:
                         one_hot_feats_constrained[np.arange(len(new_poi[one_hot_feat_names])),
                                                   new_poi[one_hot_feat_names].values.argmax(1)] = 1
                         new_poi[one_hot_feat_names] = one_hot_feats_constrained
-                #do we need to cap ordinal variables?
+
                 path.append(new_poi)
                 if self._model.predict_proba(new_poi, pos_label_only=True)[0][0] >= self._confidence_threshold:
                     break

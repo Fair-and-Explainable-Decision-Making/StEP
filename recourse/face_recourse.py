@@ -1,4 +1,5 @@
 from __future__ import annotations
+from random import sample
 from typing import Sequence, Any, Optional, Tuple, Mapping
 import pandas as pd
 import numpy as np
@@ -7,12 +8,18 @@ import time
 import json
 from models import model_interface
 from data import data_interface
+import numba
+from recourse.recourse_interface import RecourseInterface
 
+
+#TODO: check distribution of weights in the graph
+
+@numba.jit(nopython=True)
 def _get_edge_weight(distance, weight_bias):
     """Converts pairwise distances to edge weights in the FACE graph.
 
     Args:
-        distance: a float or a numpy array.
+        distance: a float or a numpy array. (l2 distance)
         weight_bias: a float.
 
     Returns:
@@ -22,6 +29,8 @@ def _get_edge_weight(distance, weight_bias):
 
 class FACE():
     """The FACE recourse method.
+
+    Modified from https://github.com/jakeval/MRMC/blob/main/recourse_methods/face_method.py
 
     This method is based on the Feasible and Actionable Counterfactual
     Explanations method described here: https://arxiv.org/abs/1909.09369.
@@ -60,7 +69,8 @@ class FACE():
         graph_filepath: Optional[str] = None,
         counterfactual_mode: bool = True,
         weight_bias: float = 0,
-        use_train_data: bool = True
+        use_train_data: bool = True,
+        graph_sample_size: Optional[int] = None
     ):
         """Creates a new FACE object.
 
@@ -73,35 +83,46 @@ class FACE():
         else:
             _, self._features_data, _, self._labels_data = data_inter.get_train_test_split()
         
+        self._features_data = self._features_data.copy().reset_index(drop=True)
+        self._labels_data = self._labels_data.copy().reset_index(drop=True)
+        if graph_sample_size:
+            self._features_data = self._features_data.head(graph_sample_size)
+            self._labels_data = self._labels_data.head(graph_sample_size)
         self.model = model
         self.confidence_threshold = confidence_threshold
-        if graph_filepath:
+        try:
             self.graph = sparse.load_npz(graph_filepath)
-        else:
+        except:
             self.graph = None
         self.candidate_indices = None
         self.distance_threshold = distance_threshold
         self.k_directions = k_directions
         self.counterfactual_mode = counterfactual_mode
         self.weight_bias = weight_bias
+        self._data_interface = data_inter
+        self._mutable_mask = [0 if ele in self._data_interface.immutable_features 
+               or ele in self._data_interface.get_processed_immutable_feats() else 1 
+               for ele in self._features_data.columns.values]
 
     def generate_graph(
         self,
         filepath_to_save_to: Optional[str] = None,
-        config: Mapping[str, Any] = None,
+        config: Mapping[str, Any] = None
     ) -> FACE:
         """Generates and saves an epsilon-graph.
 
         If `filepath_to_save_to` is provided, the graph is saved to that
         path as an .npz file. All directories along the path must already
         exist."""
+        if self.graph:
+            return self.graph
         if self.distance_threshold >= np.exp(self.weight_bias):
             raise RuntimeError(
                 "Tried to generate a graph with negative edge weights. This ",
                 "This happens if the distance threshold is equal to or ",
                 "greater than exp(weight_bias). Try increasing weight_bias.",
             )
-        data = self._features_data.values()
+        data = self._features_data.values
         start_time = time.time()
         graph_weights = FACE._get_e_graph_weights(
             data,
@@ -112,13 +133,13 @@ class FACE():
         elapsed_time = time.time() - start_time
         if filepath_to_save_to is not None:
             sparse.save_npz(filepath_to_save_to, sparse_graph_weights)
-            filepath_without_extension = ".".join(
+            """filepath_without_extension = ".".join(
                 filepath_to_save_to.split(".")[:-1]
             )
             config_name = filepath_without_extension + "_config.json"
             with open(config_name, "w") as f:
                 config["elapsed_seconds"] = elapsed_time
-                json.dump(config, f)
+                json.dump(config, f)"""
         self.graph = sparse_graph_weights
 
     def fit(self) -> FACE:
@@ -135,38 +156,35 @@ class FACE():
             raise ValueError(
                 "Dataset is empty after excluding negative outcome examples."
             )
-        self.candidate_indices = self._features_data.loc[positive_confident_df.index]
+        #self.candidate_indices = self._features_data.loc[positive_confident_df.index]
+        self.candidate_indices = np.array(positive_confident_df.index)
+        
         return self
 
     def generate_paths(
-        self, poi: recourse_adapter.EmbeddedSeries, num_paths: int
-    ) -> Sequence[recourse_adapter.EmbeddedDataFrame]:
+        self, poi: pd.DataFrame, num_paths: int
+    ) -> Sequence[pd.DataFrame]:
         """Generates FACE paths for the Point of Interest (POI)."""
         distances, predecessors = self._dijkstra_search(poi, self.graph)
         target_indices = FACE._get_k_best_candidate_indices(
             distances, self.candidate_indices, num_paths
         )
-        return self._get_paths_from_indices(target_indices, poi, predecessors)
 
-    def get_all_recourse_directions(
-        self, poi: recourse_adapter.EmbeddedSeries
-    ) -> recourse_adapter.EmbeddedDataFrame:
-        """Generates different recourse directions for the poi for each of the
-        k_directions.
-
-        If all k recourse directions are available, returns a dataframe with k
-        rows. If no recourse is available, returns an empty dataframe.
-
-        Args:
-            poi: The Point of Interest (POI) to find recourse directions for.
-
-        Returns:
-            A DataFrame containing recourse directions for the POI."""
-        return self._get_k_recourse_directions(poi, self.k_directions)
+        paths = []
+        data = self._features_data.copy()
+        for target_index in target_indices:
+            path = []
+            point_index = target_index
+            while point_index != -1:
+                path = [data.iloc[point_index].to_frame().T] + path
+                point_index = predecessors[point_index]
+            path = [poi] + path
+            paths.append(path)
+        
+        return paths
 
     def _get_k_recourse_directions(
-        self, poi: recourse_adapter.EmbeddedSeries, k_directions: int
-    ) -> recourse_adapter.EmbeddedDataFrame:
+        self, poi: pd.DataFrame, k_directions: int) -> pd.DataFrame:
         """Generates different recourse directions for the poi for each of the
         k_directions.
 
@@ -185,11 +203,11 @@ class FACE():
         recourse_points = []  # These can be counterfactuals or steps in a path
         for path in paths:
             if self.counterfactual_mode:
-                recourse_points.append(path.iloc[-1].to_numpy())
+                recourse_points.append(path.iloc[-1].values)
             else:
-                recourse_points.append(path.iloc[1].to_numpy())
+                recourse_points.append(path.iloc[1].values)
         recourse_points = np.vstack(recourse_points)
-        directions = recourse_points - poi.to_numpy()
+        directions = recourse_points - poi.values
         return pd.DataFrame(data=directions, columns=poi.index)
 
     def get_all_recourse_instructions(
@@ -209,20 +227,16 @@ class FACE():
             A Sequence of k recourse instructions for the POI. Elements may be
             None if there is no recourse available."""
         
-        recourse_directions = self.get_all_recourse_directions(poi)
+        recourse_directions = self._get_k_recourse_directions(poi, self.k_directions)
         instructions = []
         for i in range(recourse_directions.shape[0]):
-            instructions.append(
-                self.adapter.directions_to_instructions(
-                    recourse_directions.iloc[i]
-                )
-            )
+            instructions.append(recourse_directions.iloc[i])
         if len(instructions) < self.k_directions:
             instructions += [None] * (self.k_directions - len(instructions))
         return instructions
 
     def get_kth_recourse_instructions(
-        self, poi: pd.Series, dir_index: int
+        self, poi: pd.DataFrame, dir_index: int
     ) -> Optional[Any]:
         """Generates a single set of recourse instructions for the kth
         direction.
@@ -236,13 +250,10 @@ class FACE():
         Returns:
             Instructions for the POI to achieve the recourse. Returns None
             if no recourse is possible."""
-        poi = self.adapter.transform_series(poi)
         recourse_directions = self._get_k_recourse_directions(poi, 1)
         if len(recourse_directions) == 0:
             return None
-        return self.adapter.directions_to_instructions(
-            recourse_directions.iloc[0]
-        )
+        return recourse_directions
 
     @staticmethod
     @numba.jit(nopython=True)
@@ -338,10 +349,17 @@ class FACE():
         Returns:
             A new graph including the POI and the index at which the POI
             appears in the graph."""
-        data = self._features_data.copy()
+        immutable_mask = self._features_data.copy()
+        immutable_mask = (immutable_mask[self._data_interface.get_processed_immutable_feats()]-
+                                       poi[self._data_interface.get_processed_immutable_feats()].values)
+        immutable_mask.loc[~(immutable_mask==0).all(axis=1)] = np.inf
+        features_data_masked = self._features_data.copy()
+        features_data_masked[self._data_interface.get_processed_immutable_feats()] = immutable_mask
+        
         weight_vector = FACE._calculate_weight_vector(
-            poi.values, data, self.distance_threshold, self.weight_bias
+            poi.values, features_data_masked.values, self.distance_threshold, self.weight_bias
         )
+        
         return FACE._add_edges_to_graph(weight_vector, graph)
 
     @staticmethod
@@ -365,7 +383,6 @@ class FACE():
             A weight vector where the ith entry is the edge weight bewteen the
             ith datapoint and the poi."""
         distances = np.linalg.norm(data - poi, axis=1)
-
         # A mask for values we don't want to calculate weights on
         exclude_mask = (distances == 0) | (distances > distance_threshold)
 
@@ -441,7 +458,7 @@ class FACE():
             A list of at most k indices.
         """
         sorted_candidate_indices = candidate_indices[
-            np.argsort(distances[candidate_indices], kind="stable")
+            np.argsort(distances[candidate_indices], kind="stable").astype(int)
         ]
         candidate_indices = []
         for target_index in sorted_candidate_indices:
@@ -452,45 +469,46 @@ class FACE():
             candidate_indices.append(target_index)
         return np.array(candidate_indices)
 
-    def _get_paths_from_indices(
-        self,
-        target_indices: Sequence[int],
-        poi: recourse_adapter.EmbeddedSeries,
-        predecessors: Sequence[int],
-    ) -> Sequence[recourse_adapter.EmbeddedDataFrame]:
-        """Constructs the recourse paths given the target counterfactuals and a
-        predecessors array.
+class FACERecourse(RecourseInterface):
+    """
+    TODO: docstring
+    """
 
-        The ith entry of the predecessors array is the index of its
-        direct predecessor along the shortest path from the POI to i.
+    def __init__(self, model: model_interface.ModelInterface, data_interface: data_interface.DataInterface,
+                k_directions: int,
+                distance_threshold: float = 0.75,
+                confidence_threshold: Optional[float] = None,
+                graph_filepath: Optional[str] = None,
+                counterfactual_mode: bool = True,
+                weight_bias: float = 0,
+                use_train_data: bool = True,
+                graph_config: Mapping[str, Any] = None,
+                graph_sample_size: Optional[int] = None 
+            ) -> None:
 
-        For example, if the path to point 3 is POI->0->1->2, then
-        predecessors[2] = 1.
+        self.FACE_instance = FACE(data_interface, model, k_directions, distance_threshold,
+                confidence_threshold, graph_filepath, counterfactual_mode,weight_bias,
+                use_train_data, graph_sample_size)
+        self._k_directions = k_directions
+        self.FACE_instance.fit()
+        self.FACE_instance.generate_graph(graph_filepath, graph_config)
 
-        If there is no path between the POI and i, then
-        predecessors[i] = -9999.
+    def get_counterfactuals(self, poi: pd.DataFrame) -> Sequence:
+        # TODO: write docstring.
+        cfs = []
+        paths = self.get_paths(poi)
+        for p in paths:
+            cfs.append(p[-1])
+        return cfs
 
-        If the ith entry is preceeded by the POI itself, then
-        predecessors[i] = -1.
-
-        Args:
-            target_indices: The indices of the counterfactuals to use as path
-                targets.
-            poi: The Point of Interest which starts the path.
-            predecessors: An array of direct predecessor indices along the
-                shortest path from the POI.
-
-        Returns:
-            A list of recourse paths written as DataFrames.
-        """
-        paths = []
-        data = self._features_data.copy()
-        for target_index in target_indices:
-            path = []
-            point_index = target_index
-            while point_index != -1:
-                path = [data[point_index]] + path
-                point_index = predecessors[point_index]
-            path = [poi.to_numpy()] + path
-            paths.append(pd.DataFrame(columns=poi.index, data=np.vstack(path)))
-        return paths
+    def get_paths(self, poi: pd.DataFrame) -> Sequence:
+        # TODO: write docstring.
+        return self.FACE_instance.generate_paths(poi,self._k_directions)
+    
+    def get_counterfactuals_from_paths(self, paths: Sequence) -> Sequence:
+        # TODO: write docstring.
+        cfs = []
+        for p in paths:
+            cfs.append(p[-1])
+        return cfs
+    

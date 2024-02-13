@@ -20,7 +20,6 @@ def create_credit_default_interface() -> DataInterface:
     df = pd.read_excel(file_path, header=1)
     df.rename(columns={"PAY_0": "PAY_1"},inplace=True)
 
-    pay_mapping = {0: [-1, -2]}
     for pay_column in [f"PAY_{i}" for i in range(1, 7)]:
         df.loc[df[pay_column] < 0, pay_column] = 0
     di = DataInterface(None, file_path, continuous_features, ordinal_features,
