@@ -130,6 +130,29 @@ def generate_recourse_results(poi, recourse_interface, model_interface,k_directi
 if __name__ == "__main__":
     #argument = your dict
     #TODO: give names for util files that can go in here
+    """
+    Argument values
+    - "trials": any positive int
+    - "dataset name": one of "credit default", "give credit", or "adult census"
+    - "dataset encoded": just "OneHot" or None,
+    - "dataset scaler" : "Standard", "MinMax, or None
+    - "dataset valid-test split" : List[float, float] where both values summed is < 1.0
+    - "base model":
+        - "name": "BaselineDNN", "LogisticRegressionPT", "LogisticRegressionSK", or "RandomForestSK"
+        - "batch_size": Number of samples for each batch (PyTorch only)
+        - "epochs": Number of epochs for training (PyTorch only)
+        - "lr": Learning rate (PyTorch only)
+    - "recourse methods": dictionary of keys=recourse method name and values=dict of recourse arguments
+        - "StEP": dict of StEP arguments ('k_directions', 'max_iterations', 'confidence_threshold',
+                            'directions_rescaler','step_size')
+        - "DiCE": dict of DiCE arguments ('backend','k_directions','confidence_threshold')
+        - "FACE": dict of FACE arguments ('k_directions', 'direction_threshold', 'confidence_threshold','weight_bias')
+        - Note, not all of the recorse methods need to be in the dict. 
+            E.g., you can just have, 
+                "recourse methods" : {"StEP": {'k_directions':3, 'max_iterations':50, 'confidence_threshold':0.7,
+                'directions_rescaler': "constant step size", 'step_size': 1.0}}
+            for your recourse methods.
+    """
     arguments = {
         "trials": 10,
         "dataset name": "credit default",
