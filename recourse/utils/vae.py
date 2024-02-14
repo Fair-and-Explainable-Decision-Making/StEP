@@ -7,8 +7,30 @@ import tensorflow as tf
 import torch
 import torch.nn as nn
 
-from carla import log
-from carla.recourse_methods.autoencoder.save_load import get_home
+#from carla import log
+import os
+
+
+def get_home(models_home=None):
+    """Return a path to the cache directory for trained autoencoders.
+
+    This directory is then used by :func:`save`.
+
+    If the ``models_home`` argument is not specified, it tries to read from the
+    ``CF_MODELS`` environment variable and defaults to ``~/cf-bechmark/models``.
+
+    """
+
+    if models_home is None:
+        models_home = os.environ.get(
+            "CF_MODELS", os.path.join("~", "carla", "models", "autoencoders")
+        )
+
+    models_home = os.path.expanduser(models_home)
+    if not os.path.exists(models_home):
+        os.makedirs(models_home)
+
+    return models_home
 
 tf.compat.v1.disable_eager_execution()
 
@@ -130,7 +152,7 @@ class VariationalAutoencoder(nn.Module):
 
         # Train the VAE with the new prior
         ELBO = np.zeros((epochs, 1))
-        log.info("Start training of Variational Autoencoder...")
+        print("Start training of Variational Autoencoder...")
         for epoch in range(epochs):
 
             beta = epoch * kl_weight / epochs
@@ -164,17 +186,17 @@ class VariationalAutoencoder(nn.Module):
 
             ELBO[epoch] = train_loss / train_loss_num
             if epoch % 10 == 0:
-                log.info(
+                print(
                     "[Epoch: {}/{}] [objective: {:.3f}]".format(
                         epoch, epochs, ELBO[epoch, 0]
                     )
                 )
 
             ELBO_train = ELBO[epoch, 0].round(2)
-            log.info("[ELBO train: " + str(ELBO_train) + "]")
+            print("[ELBO train: " + str(ELBO_train) + "]")
 
         self.save()
-        log.info("... finished training of Variational Autoencoder.")
+        print("... finished training of Variational Autoencoder.")
 
         self.eval()
 

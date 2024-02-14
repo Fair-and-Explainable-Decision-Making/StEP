@@ -109,7 +109,7 @@ class DataInterface():
         self._features_df = df[df.columns[df.columns != target_feature]]
         self._feature_columns = df.columns[df.columns != target_feature]
 
-    def split_data(self, validation_size: float = 0.15, test_size: float = 0.15) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def split_data(self, validation_size: float = 0.15, test_size: float = 0.15,random_state=None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Splits data into X and y and train and test data. Should be used as the last step when setting up data.
 
@@ -125,10 +125,10 @@ class DataInterface():
             Dataframes of non-target and target features seperated also split into training, validation, and testing data.
         """
         self._features_train, self._features_test, self._labels_train, self._labels_test = train_test_split(
-            self._features_df, self._labels_df, test_size=validation_size+test_size, random_state=103932)
+            self._features_df, self._labels_df, test_size=validation_size+test_size, random_state=random_state)
         test_ratio = test_size/(validation_size+test_size)
         self._features_valid, self._features_test, self._labels_valid, self._labels_test = train_test_split(
-            self._features_test, self._labels_test, test_size=test_ratio)
+            self._features_test, self._labels_test, test_size=test_ratio,random_state=random_state)
         return self._features_train, self._features_valid, self._features_test, self._labels_train, self._labels_valid, self._labels_test
 
     def scale_data(self, scaling_method: str) -> pd.DataFrame:
