@@ -21,7 +21,7 @@ class StEP:
         directions_rescaler: str = "normalize", special_cluster_data = None
     ):
 
-        if directions_rescaler == "constant step size" and step_size == None:
+        if directions_rescaler == "constant step size" and step_size is None:
             raise ("Step size required for constant step size rescaler")
         if directions_rescaler not in [None, "None", "normalize", "constant step size"]:
             raise ("Invalid direction rescaler")

@@ -1,11 +1,8 @@
 from __future__ import annotations
-from random import sample
 from typing import Sequence, Any, Optional, Tuple, Mapping
 import pandas as pd
 import numpy as np
 from scipy import sparse
-import time
-import json
 from models import model_interface
 from data import data_interface
 import numba
@@ -70,7 +67,8 @@ class FACE():
         counterfactual_mode: bool = True,
         weight_bias: float = 0,
         use_train_data: bool = True,
-        graph_sample_size: Optional[int] = None
+        graph_sample_size: Optional[int] = None,
+        max_iterations = np.inf
     ):
         """Creates a new FACE object.
 
@@ -92,7 +90,7 @@ class FACE():
         self.confidence_threshold = confidence_threshold
         try:
             self.graph = sparse.load_npz(graph_filepath)
-        except:
+        except Exception:
             self.graph = None
         self.candidate_indices = None
         self.distance_threshold = distance_threshold
@@ -103,6 +101,7 @@ class FACE():
         self._mutable_mask = [0 if ele in self._data_interface.immutable_features 
                or ele in self._data_interface.get_processed_immutable_feats() else 1 
                for ele in self._features_data.columns.values]
+        self._max_iterations = max_iterations
 
     def generate_graph(
         self,
@@ -123,14 +122,14 @@ class FACE():
                 "greater than exp(weight_bias). Try increasing weight_bias.",
             )
         data = self._features_data.values
-        start_time = time.time()
+        
         graph_weights = FACE._get_e_graph_weights(
             data,
             self.distance_threshold,
             weight_bias=self.weight_bias,
         )
         sparse_graph_weights = sparse.csr_array(graph_weights)
-        elapsed_time = time.time() - start_time
+        
         if filepath_to_save_to is not None:
             sparse.save_npz(filepath_to_save_to, sparse_graph_weights)
             """filepath_without_extension = ".".join(
@@ -179,7 +178,10 @@ class FACE():
                 path = [data.iloc[point_index].to_frame().T] + path
                 point_index = predecessors[point_index]
             path = [poi] + path
-            paths.append(path)
+            if len(path) > self._max_iterations:
+                paths.append([])
+            else:
+                paths.append(path)
         
         return paths
 
