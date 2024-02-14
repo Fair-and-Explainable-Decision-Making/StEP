@@ -10,21 +10,26 @@ def get_dataset_interface_by_name(name: str) -> DataInterface:
 def create_credit_default_interface() -> DataInterface:
     continuous_features = ["LIMIT_BAL", "AGE"]+[f"PAY_{i}" for i in range(
         1, 7)]+[f"BILL_AMT{i}" for i in range(1, 7)]+[f"PAY_AMT{i}" for i in range(1, 7)]
-    ordinal_features = []
-    categorical_features = []
-    immutable_features = []
+    ordinal_features = ["EDUCATION"]
+    ordinal_features_order = {"EDUCATION": [5,4,3, 2, 1]}
+    unidirection_features = [[], ["EDUCATION"]]
+    categorical_features = ["SEX", "MARRIAGE"]
+    immutable_features = ["SEX", "MARRIAGE","AGE"]
     label_column = "default payment next month"
     positive_label = 0
     file_path = (
         "data/datasets/default of credit card clients.xls")
     df = pd.read_excel(file_path, header=1)
-    df.rename(columns={"PAY_0": "PAY_1"},inplace=True)
+    df.loc[df['EDUCATION'].isin([0,6]), "EDUCATION"] = 5
+
+    df.rename(columns={"PAY_0": "PAY_1"}, inplace=True)
 
     for pay_column in [f"PAY_{i}" for i in range(1, 7)]:
         df.loc[df[pay_column] < 0, pay_column] = 0
-    di = DataInterface(None, file_path, continuous_features, ordinal_features,
-                       categorical_features, immutable_features, label_column,
-                       pos_label=positive_label, file_header_row=1, dropped_columns=["ID"])
+    di = DataInterface(df, None, continuous_features, ordinal_features,
+                           categorical_features, immutable_features, label_column,
+                           pos_label=positive_label, file_header_row=1, dropped_columns=["ID"], 
+                           unidirection_features=unidirection_features, ordinal_features_order=ordinal_features_order)
     return di
 
 def load_census():
