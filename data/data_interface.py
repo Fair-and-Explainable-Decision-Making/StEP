@@ -76,6 +76,7 @@ class DataInterface():
             df = pd.read_excel(file_path, header=file_header_row)
         else:
             raise Exception("No data and valid file path provided")
+        df = df.drop(columns=dropped_columns)
         self.dataset = df.copy()
         self._pos_label = pos_label
         self._unidirection_features = unidirection_features
@@ -88,7 +89,7 @@ class DataInterface():
         Necessary preprocessing for dropping undesired columns and mapping 
         labels to 0 (negative) and 1 (positive).
         """
-        df = df.drop(columns=dropped_columns)
+        
         if target_mapping is None:
             neg_labels = np.delete(pd.unique(df[target_feature]),
                                    np.where(pd.unique(df[target_feature]) == pos_label))
