@@ -13,7 +13,8 @@ def get_recourse_interface_by_name(recourse_name: str, model_interface: ModelInt
         return StEPRecourse(model_interface, data_interface, kwargs['k_directions'], kwargs['max_iterations'], confidence_threshold=kwargs['confidence_threshold'],
                             directions_rescaler=kwargs['directions_rescaler'], step_size=kwargs['step_size'],random_seed=kwargs['random seed'])
     elif recourse_name == "DiCE":
-        return DiceRecourse(model_interface, data_interface, backend=kwargs["backend"], default_k=kwargs['k_directions'], confidence_threshold=kwargs['confidence_threshold'])
+        return DiceRecourse(model_interface, data_interface, backend=kwargs["backend"], default_k=kwargs['k_directions'], 
+                            confidence_threshold=kwargs['confidence_threshold'],random_seed=kwargs['random seed'])
     elif recourse_name == "FACE":
         return FACERecourse(model_interface, data_interface, k_directions=kwargs['k_directions'], distance_threshold=kwargs['direction_threshold'], 
                             confidence_threshold=kwargs['confidence_threshold'],weight_bias=kwargs['weight_bias'])

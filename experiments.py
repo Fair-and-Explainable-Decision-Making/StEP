@@ -1,5 +1,8 @@
+from ast import arg
 import pandas as pd
 from typing import Tuple
+
+from sympy import false
 import metrics.recourse_metrics as recourse_metrics
 import metrics.classifier_metrics as classifier_metrics
 import numpy as np
@@ -8,6 +11,8 @@ from data.dataset_utils import get_dataset_interface_by_name
 from models.model_utils import get_model_interface_by_name
 from recourse.utils.recourse_utils import get_recourse_interface_by_name
 from joblib import Parallel, delayed
+import torch
+import random
 
 
 def run_experiments_trials(arguments: dict) -> Tuple[dict, dict]:
@@ -62,8 +67,10 @@ def run_experiments_one_trial(arguments, trial_num=0):
                     arguments["base model"]["name"],str(trial_num)).replace(" ", "")
     if arguments["save experiment"]:
         arguments["file name"] = file_str
-    np.random.seed(trial_num) 
-    recourse_results_dict = {}
+    np.random.seed(trial_num)
+    torch.manual_seed(trial_num)
+    random.seed(trial_num)
+    
     start_trial = time.time()
     data_interface = get_dataset_interface_by_name(arguments["dataset name"])
     if arguments["dataset encoded"]:
@@ -74,38 +81,50 @@ def run_experiments_one_trial(arguments, trial_num=0):
         arguments["dataset valid-test split"][0], arguments["dataset valid-test split"][1], random_state=trial_num)
     model_args = arguments["base model"].copy()
     model_args["feats_train"], model_args["feats_valid"], model_args["labels_valid"] = feats_train, feats_valid, labels_valid
-    model_interface = get_model_interface_by_name(**model_args)
-
-    model_interface.fit(feats_train, labels_train)
+    model_args['random seed'] = trial_num 
+    model_interface = get_model_interface_by_name(**model_args) 
+    if model_args["load model"]:
+        model_interface.load_model("models/saved models/"+file_str)
+    else:
+        model_interface.fit(feats_train, labels_train)
+    if model_args["save model"]:
+        model_interface.save_model("models/saved models/"+file_str)
     preds = pd.Series(model_interface.predict(
         feats_test), index=feats_test.index)
     neg_data = feats_test.loc[preds[preds != 1].index]
+    print(neg_data.shape)
     # TODO: change this to output to a text file or something similar
     base_model_results = classifier_metrics.run_classifier_tests(labels_test, model_interface.predict(feats_test))
 
     done_training_trial = time.time()
     print("Model training took", done_training_trial-start_trial, "seconds")
-    for recourse_name, recourse_args in arguments["recourse methods"].items():
-        recourse_args['random seed'] = trial_num
-        start_recourse = time.time()
-        if recourse_name not in recourse_results_dict:
-            recourse_results_dict[recourse_name] = []
-        recourse_interface = get_recourse_interface_by_name(
-            recourse_name, model_interface, data_interface, **recourse_args)
-        k_directions = recourse_args['k_directions']
-        recourse_results = neg_data.apply(
-            lambda row: generate_recourse_results(row, recourse_interface, model_interface, k_directions), axis=1)
-        df_results = pd.DataFrame.from_dict(
-            dict(zip(recourse_results.index, recourse_results.values))).T
-        df_results.rename(columns={0: "l2_path_len", 1: "l2_prox", 2: "l2_path_steps",
-                                   3: "poi_id", 4: "failures", 5: "diversity"}, inplace=True)
-        print(df_results)
-        df_results = df_results.explode(df_results.columns.values.tolist())
-        recourse_results_dict[recourse_name].append(
-            df_results.mean(axis=0).to_frame().T)
-        end_recourse = time.time()
-        print(recourse_name, "recourse took", end_recourse -
-              start_recourse, "seconds for", len(neg_data), "samples.")
+    recourse_results_dict = {}
+    if "only base model" not in arguments: arguments["only base model"] = False
+    if not arguments["only base model"]:
+        for recourse_name, recourse_args in arguments["recourse methods"].items():
+            recourse_args['random seed'] = trial_num
+            start_recourse = time.time()
+            if recourse_name not in recourse_results_dict:
+                recourse_results_dict[recourse_name] = []
+            recourse_interface = get_recourse_interface_by_name(
+                recourse_name, model_interface, data_interface, **recourse_args)
+            k_directions = recourse_args['k_directions']
+            recourse_results = neg_data.apply(
+                lambda row: generate_recourse_results(row, recourse_interface, model_interface, k_directions), axis=1)
+            print(recourse_results)
+            df_results = pd.DataFrame.from_dict(
+                dict(zip(recourse_results.index, recourse_results.values))).T
+            df_results.rename(columns={0: "l2_path_len", 1: "l2_prox", 2: "l2_path_steps",
+                                    3: "poi_id", 4: "failures", 5: "diversity"}, inplace=True)
+            print(trial_num)
+            print(df_results)
+            print(df_results[df_results.stack().str.len().lt(k_directions).any(level=0)])
+            df_results = df_results.explode(df_results.columns.values.tolist())
+            recourse_results_dict[recourse_name].append(
+                df_results.mean(axis=0).to_frame().T)
+            end_recourse = time.time()
+            print(recourse_name, "recourse took", end_recourse -
+                start_recourse, "seconds for", len(neg_data), "samples.")
     end_trial = time.time()
     print("Trial", trial_num, "took", end_trial-start_trial, "seconds.")
     return recourse_results_dict, base_model_results
@@ -120,7 +139,7 @@ def generate_recourse_results(poi, recourse_interface, model_interface, k_direct
     l2_prox = []
     l2_path_steps = []
     failures = []
-    if len(paths) < 1 or paths is None:
+    if len(paths) != k_directions or paths is None:
         failures = [1]*k_directions
         l2_path_len = [np.nan]*k_directions
         l2_prox = [np.nan]*k_directions
@@ -175,23 +194,102 @@ if __name__ == "__main__":
                 'directions_rescaler': "constant step size", 'step_size': 1.0}}
             for your recourse methods.
     """
-    arguments = {
-        "n jobs": 5,
-        "trials": 10,
+    arguments_step = {
+        "n jobs": 8,
+        "trials": 20,
         "dataset name": "credit default",
         "dataset encoded": "OneHot",
         "dataset scaler": "Standard",
         "dataset valid-test split": [0.15, 0.15],
-        "base model": {"name": "LogisticRegressionSK"},
+        "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
         "recourse methods": {"StEP": {'k_directions':3, 'max_iterations':50, 'confidence_threshold':0.7,
                 'directions_rescaler': "constant step size", 'step_size': 1.0}},
         "save results": True,
         "save experiment": True
     }
-    all_results = run_experiments_trials(arguments)
+    arguments_dice = {
+        "n jobs": 5,
+        "trials": 20,
+        "dataset name": "credit default",
+        "dataset encoded": "OneHot",
+        "dataset scaler": "Standard",
+        "dataset valid-test split": [0.15, 0.15],
+        "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
+        "recourse methods": {"DiCE": {'k_directions':3, 'backend':'sklearn', 'confidence_threshold':0.7}},
+        "save results": True,
+        "save experiment": True
+    }
+    arguments_face = {
+        "n jobs": 5,
+        "trials": 20,
+        "dataset name": "credit default",
+        "dataset encoded": "OneHot",
+        "dataset scaler": "Standard",
+        "dataset valid-test split": [0.15, 0.15],
+        "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
+        "recourse methods": {"FACE": {'k_directions':3, 'direction_threshold':3.0, 'confidence_threshold':0.7,
+                                      'weight_bias':2.024}},
+        "save results": True,
+        "save experiment": True
+    }
+    #all_results = run_experiments_trials(arguments_step)
+    #all_results = run_experiments_trials(arguments_dice)
+    #all_results = run_experiments_trials(arguments_face)
 
-    for r in all_results:
-        print("---------")
-        print(r)
-    
+    arguments_step = {
+        "n jobs": 8,
+        "trials": 20,
+        "dataset name": "credit default",
+        "dataset encoded": "OneHot",
+        "dataset scaler": "Standard",
+        "dataset valid-test split": [0.15, 0.15],
+        "base model": {"name": "RandomForestSK", "load model": False, "save model": False},
+        "recourse methods": {"StEP": {'k_directions':3, 'max_iterations':50, 'confidence_threshold':0.7,
+                'directions_rescaler': "constant step size", 'step_size': 1.0}},
+        "save results": True,
+        "save experiment": True
+    }
+    arguments_dice = {
+        "n jobs": 5,
+        "trials": 1,
+        "dataset name": "credit default",
+        "dataset encoded": "OneHot",
+        "dataset scaler": "Standard",
+        "dataset valid-test split": [0.15, 0.15],
+        "base model": {"name": "RandomForestSK", "load model": False, "save model": False},
+        "recourse methods": {"DiCE": {'k_directions':3, 'backend':'sklearn', 'confidence_threshold':0.7}},
+        "save results": True,
+        "save experiment": True
+    }
+    arguments_face = {
+        "n jobs": 5,
+        "trials": 20,
+        "dataset name": "credit default",
+        "dataset encoded": "OneHot",
+        "dataset scaler": "Standard",
+        "dataset valid-test split": [0.15, 0.15],
+        "base model": {"name": "RandomForestSK", "load model": False, "save model": False},
+        "recourse methods": {"FACE": {'k_directions':3, 'direction_threshold':3.0, 'confidence_threshold':0.7,
+                                      'weight_bias':2.024}},
+        "save results": True,
+        "save experiment": True,
+    }
+    #all_results = run_experiments_trials(arguments_step)
+    #all_results = run_experiments_trials(arguments_dice)
+    all_results = run_experiments_trials(arguments_face)
     # TODO: use df.to_latex
+
+    arguments_model_training = {
+        "n jobs": 5,
+        "trials": 20,
+        "dataset name": "credit default",
+        "dataset encoded": "OneHot",
+        "dataset scaler": "Standard",
+        "dataset valid-test split": [0.15, 0.15],
+        "base model": {"name": "RandomForestSK", "load model": False, "save model": False},
+        "recourse methods": {"FACE": {'k_directions':3, 'direction_threshold':3.0, 'confidence_threshold':0.7,
+                                      'weight_bias':2.024}},
+        "save results": True,
+        "save experiment": True,
+        "only base model": True
+    }

@@ -161,3 +161,9 @@ class PyTorchModel:
         Returns the model used by the interface.
         """
         return self._model
+    
+    def save_model(self, file_path):
+        torch.save(self._model.state_dict(), file_path)
+
+    def load_model(self, file_path):
+        self._model.load_state_dict(torch.load(file_path))

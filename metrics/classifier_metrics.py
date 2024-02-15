@@ -8,4 +8,5 @@ def run_classifier_tests(labels_true, pred, verbose=False):
     pos_acc = tp/(tp+fn)
     acc = accuracy_score(labels_true, pred)
     f1 =f1_score(labels_true, pred)
-    return pd.DataFrame([[acc, neg_acc, pos_acc, f1]],columns=['acc', 'neg_acc', 'pos_acc', 'f1'])
+    print(conf_matrix)
+    return pd.DataFrame([[acc, neg_acc, pos_acc, f1,tn, fp, fn, tp]],columns=['acc', 'neg_acc', 'pos_acc', 'f1', 'tn', 'fp', 'fn', 'tp'])

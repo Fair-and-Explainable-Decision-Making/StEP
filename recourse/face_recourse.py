@@ -177,11 +177,13 @@ class FACE():
             while point_index != -1:
                 path = [data.iloc[point_index].to_frame().T] + path
                 point_index = predecessors[point_index]
-            path = [poi] + path
+                if len(path) > self._max_iterations:
+                    break
             if len(path) > self._max_iterations:
-                paths.append([])
+                    path = [poi]
             else:
-                paths.append(path)
+                path = [poi] + path
+            paths.append(path)
         
         return paths
 

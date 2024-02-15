@@ -15,9 +15,9 @@ def get_model_interface_by_name(**kwargs) -> ModelInterface:
         model = PyTorchModel(LogisticRegressionPT(kwargs['feats_train'].shape[1]), validation_features=kwargs['feats_valid'],
                              validation_labels=kwargs['labels_valid'], batch_size=kwargs['batch_size'], epochs=kwargs['epochs'], lr=kwargs['lr'])
     elif model_name == "LogisticRegressionSK":
-        model = LogisticRegression(class_weight="balanced")
+        model = LogisticRegression(class_weight="balanced",random_state=kwargs['random seed'])
     elif model_name == "RandomForestSK":
-        model = RandomForestClassifier()
+        model = RandomForestClassifier(class_weight="balanced",random_state=kwargs['random seed'])
     else:
         raise Exception("Invalid model choice")
     return ModelInterface(model)

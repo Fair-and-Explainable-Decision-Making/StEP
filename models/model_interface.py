@@ -5,6 +5,7 @@ import numpy as np
 import torch
 
 from models.pytorch_wrapper import PyTorchModel
+from joblib import dump, load
 
 DATA_TYPES = Union[np.ndarray, pd.DataFrame, torch.Tensor]
 
@@ -89,3 +90,15 @@ class ModelInterface():
             return self._model
         elif isinstance(self._model, PyTorchModel):
             return self._model.get_model()
+        
+    def save_model(self, file_path):
+        if isinstance(self._model, sklearn.base.BaseEstimator):
+            return dump(self._model, file_path+'.joblib')
+        elif isinstance(self._model, PyTorchModel):
+            return self._model.save_model(file_path+'.pt')
+    
+    def load_model(self, file_path):
+        if isinstance(self._model, sklearn.base.BaseEstimator):
+            self._model = load(self._model, file_path+'.joblib')
+        elif isinstance(self._model, PyTorchModel):
+            self._model.load_model(file_path+'.pt')
