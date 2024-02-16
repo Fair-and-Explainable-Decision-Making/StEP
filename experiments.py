@@ -1,8 +1,6 @@
-from ast import arg
 import pandas as pd
 from typing import Tuple
 
-from sympy import false
 import metrics.recourse_metrics as recourse_metrics
 import metrics.classifier_metrics as classifier_metrics
 import numpy as np
@@ -99,7 +97,8 @@ def run_experiments_one_trial(arguments, trial_num=0):
     done_training_trial = time.time()
     print("Model training took", done_training_trial-start_trial, "seconds")
     recourse_results_dict = {}
-    if "only base model" not in arguments: arguments["only base model"] = False
+    if "only base model" not in arguments: 
+        arguments["only base model"] = False
     if not arguments["only base model"]:
         for recourse_name, recourse_args in arguments["recourse methods"].items():
             recourse_args['random seed'] = trial_num
@@ -120,9 +119,11 @@ def run_experiments_one_trial(arguments, trial_num=0):
             print(df_results)
             print(df_results[df_results.stack().str.len().lt(k_directions).any(level=0)])
             df_results = df_results.explode(df_results.columns.values.tolist())
+            end_recourse = time.time()
+            df_results["time"] = end_recourse - start_recourse
             recourse_results_dict[recourse_name].append(
                 df_results.mean(axis=0).to_frame().T)
-            end_recourse = time.time()
+            
             print(recourse_name, "recourse took", end_recourse -
                 start_recourse, "seconds for", len(neg_data), "samples.")
     end_trial = time.time()
@@ -228,7 +229,7 @@ if __name__ == "__main__":
         "dataset valid-test split": [0.15, 0.15],
         "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
         "recourse methods": {"FACE": {'k_directions':3, 'direction_threshold':3.0, 'confidence_threshold':0.7,
-                                      'weight_bias':2.024}},
+                                      'weight_bias':2.024},},
         "save results": True,
         "save experiment": True
     }
@@ -250,8 +251,8 @@ if __name__ == "__main__":
         "save experiment": True
     }
     arguments_dice = {
-        "n jobs": 5,
-        "trials": 1,
+        "n jobs": 8,
+        "trials": 20,
         "dataset name": "credit default",
         "dataset encoded": "OneHot",
         "dataset scaler": "Standard",
@@ -276,20 +277,20 @@ if __name__ == "__main__":
     }
     #all_results = run_experiments_trials(arguments_step)
     #all_results = run_experiments_trials(arguments_dice)
-    all_results = run_experiments_trials(arguments_face)
+    #all_results = run_experiments_trials(arguments_face)
+    #all_results = run_experiments_trials(arguments_dice)
     # TODO: use df.to_latex
 
     arguments_model_training = {
-        "n jobs": 5,
+        "n jobs": 1,
         "trials": 20,
-        "dataset name": "credit default",
+        "dataset name": "give credit",
         "dataset encoded": "OneHot",
         "dataset scaler": "Standard",
         "dataset valid-test split": [0.15, 0.15],
         "base model": {"name": "RandomForestSK", "load model": False, "save model": False},
-        "recourse methods": {"FACE": {'k_directions':3, 'direction_threshold':3.0, 'confidence_threshold':0.7,
-                                      'weight_bias':2.024}},
         "save results": True,
         "save experiment": True,
         "only base model": True
     }
+    run_experiments_trials(arguments_model_training)
