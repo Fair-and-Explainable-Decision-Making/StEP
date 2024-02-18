@@ -4,6 +4,7 @@ import dice_ml
 import pandas as pd
 from recourse.recourse_interface import RecourseInterface
 from typing import Optional, Sequence
+from raiutils.exceptions import UserConfigValidationException
 
 
 class DiceRecourse(RecourseInterface):
@@ -46,7 +47,7 @@ class DiceRecourse(RecourseInterface):
             confidence_threshold = self._confidence_threshold
         poi = poi.astype(self._orig_data_types)
 
-        if self._backend is not "PYT":
+        if self._backend != "PYT":
             dice_exp = self._dice.generate_counterfactuals(
                 poi,
                 total_CFs=num_CFs,
@@ -68,8 +69,13 @@ class DiceRecourse(RecourseInterface):
         return cfs
 
     def get_paths(self, poi: pd.DataFrame, sparsity_param: float = None, num_CFs: int = None, confidence_threshold: float = None):
-        cfs = self.get_counterfactuals(poi, sparsity_param, num_CFs, confidence_threshold)
-        cfs = [cfs.loc[[i]] for i in cfs.index] 
+        try:
+            cfs = self.get_counterfactuals(poi, sparsity_param, num_CFs, confidence_threshold)
+            cfs = [cfs.loc[[i]] for i in cfs.index] 
+        except UserConfigValidationException:
+            return [[poi]]*self._default_k
+        except:
+            raise
         paths = []
         for cf in cfs:
             paths.append([poi, cf])
