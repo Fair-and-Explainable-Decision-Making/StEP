@@ -74,6 +74,8 @@ class DiceRecourse(RecourseInterface):
             cfs = [cfs.loc[[i]] for i in cfs.index] 
         except UserConfigValidationException:
             return [[poi]]*self._default_k
+        except ValueError:
+            return [[poi]]*self._default_k
         except:
             raise
         paths = []
