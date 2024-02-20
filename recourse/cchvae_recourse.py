@@ -6,11 +6,15 @@ import torch
 from numpy import linalg as LA
 from models import model_interface
 from data import data_interface
+from recourse.recourse_interface import RecourseInterface
+from typing import Optional, Sequence
+from sklearn.preprocessing import MinMaxScaler
+import tensorflow as tf
 
 #from carla import log
 #from carla.models.api import MLModel
 
-from recourse.utils.recourse_utils import constrain_one_hot_cat_featutes
+from recourse.utils.recourse_utils import constrain_one_hot_cat_features
 from recourse.utils.vae import VariationalAutoencoder
 from recourse.utils.carla_utils import (
     merge_default_parameters,
@@ -83,8 +87,9 @@ class CCHVAE():
         "clamp": True,
         "binary_cat_features": True,
         "confidence_threshold": 0.5,
+        "k_directions" : 1,
         "vae_params": {
-            "layers": None,
+            "layers": [ 512, 256, 8 ],
             "train": True,
             "kl_weight": 0.3,
             "lambda_reg": 1e-6,
@@ -97,6 +102,11 @@ class CCHVAE():
 
     def __init__(self, mlmodel: model_interface.ModelInterface, data_interface: data_interface.DataInterface, hyperparams: Dict = None) -> None:
         self._mlmodel = mlmodel
+        self._data_interface = data_interface
+        features, _, labels, _ = data_interface.get_train_test_split()
+        self._mutable_mask = [0 if ele in self._data_interface.immutable_features 
+               or ele in self._data_interface.get_processed_immutable_feats() else 1 
+               for ele in features.columns.values]
         
         self._params = merge_default_parameters(hyperparams, self._DEFAULT_HYPERPARAMS)
 
@@ -105,15 +115,15 @@ class CCHVAE():
         self._step = self._params["step"]
         self._max_iter = self._params["max_iter"]
         self._clamp = self._params["clamp"]
+        self._k_directions = self._params["k_directions"]
+        self._params["vae_params"]["layers"] = [sum(self._mutable_mask)] + self._params["vae_params"]["layers"]
         vae_params = self._params["vae_params"]
-        self._data_interface = data_interface
-        features, _, labels, _ = data_interface.get_train_test_split()
+        self._scaler = MinMaxScaler().fit(features)
+        features[features.columns] = self._scaler.transform(features)
         self._generative_model = self._load_vae(
             features, vae_params, self._mlmodel, self._params["data_name"]
         )
-        self._mutable_mask = [0 if ele in self._data_interface.immutable_features 
-               or ele in self._data_interface.get_processed_immutable_feats() else 1 
-               for ele in features.columns.values]
+        
         self._feature_columns = features.columns.values
         self._confidence_threshold = self._params["confidence_threshold"]
 
@@ -123,7 +133,7 @@ class CCHVAE():
         
         
         generative_model = VariationalAutoencoder(
-            data_name, vae_params["layers"], self._mutable_mask
+            data_name, vae_params["layers"], np.array(list(map(bool,self._mutable_mask)))
         )
 
         if vae_params["train"]:
@@ -137,7 +147,7 @@ class CCHVAE():
             )
         else:
             try:
-                generative_model.load(vae_params["layers"][0])
+                generative_model.load()
             except FileNotFoundError as exc:
                 raise FileNotFoundError(
                     "Loading of Autoencoder failed. {}".format(str(exc))
@@ -166,8 +176,8 @@ class CCHVAE():
         candidate_counterfactuals = instance + delta_instance
         return candidate_counterfactuals, dist
 
-    def _counterfactual_search(
-        self, step: int, factual: torch.Tensor, cat_features_indices: List
+    def counterfactual_search(
+        self, step: int, factual: pd.DataFrame
     ) -> pd.DataFrame:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -177,8 +187,8 @@ class CCHVAE():
         # counter
         count = 0
         counter_step = 1
-
-        torch_fact = torch.from_numpy(factual).to(device)
+        tranformed_factual = self._scaler.transform(factual)
+        torch_fact = torch.from_numpy(tranformed_factual).to(device)
 
         # get predicted label of instance
         """instance_label = np.argmax(
@@ -207,7 +217,7 @@ class CCHVAE():
             count = count + counter_step
             if count > self._max_iter:
                 print("No counterfactual example found")
-                return x_ce[0]
+                return np.repeat(factual.values, self._k_directions, axis=0)
 
             # STEP 1 -- SAMPLE POINTS on hyper sphere around instance
             latent_neighbourhood, _ = self._hyper_sphere_coordindates(z_rep, high, low)
@@ -226,7 +236,7 @@ class CCHVAE():
             )"""
             x_ce = x_ce.detach().cpu().numpy()
             x_ce_df = pd.DataFrame(x_ce, columns = self._feature_columns)
-            x_ce = x_ce_df.apply(lambda x: constrain_one_hot_cat_featutes(x, self._data_interface)).values
+            x_ce = pd.concat(x_ce_df.apply(lambda x: constrain_one_hot_cat_features(x, self._data_interface),axis=1).values).values
             x_ce = x_ce.clip(0, 1) if self._clamp else x_ce
 
             # STEP 2 -- COMPUTE l1 & l2 norms
@@ -240,7 +250,8 @@ class CCHVAE():
                 raise ValueError("Possible values for p_norm are 1 or 2")
 
             # counterfactual labels
-            y_candidate = self._mlmodel.predict(x_ce, confidence_threshold = self._confidence_threshold)
+            x_ce_untransformed = self._scaler.inverse_transform(x_ce)
+            y_candidate = self._mlmodel.predict(x_ce_untransformed, confidence_threshold = self._confidence_threshold)
             """np.argmax(
                 self._mlmodel.predict_proba(torch.from_numpy(x_ce).float())
                 .cpu()
@@ -249,36 +260,58 @@ class CCHVAE():
                 axis=1,
             )"""
             indices = np.where(y_candidate != instance_label)
-            candidate_counterfactuals = x_ce[indices]
+            candidate_counterfactuals = x_ce_untransformed[indices]
             candidate_dist = distances[indices]
             # no candidate found & push search range outside
-            if len(candidate_dist) == 0:
+            if len(candidate_dist) < self._k_directions:
                 low = high
                 high = low + step
-            elif len(candidate_dist) > 0:
+            elif len(candidate_dist) >= self._k_directions:
                 # certain candidates generated
-                min_index = np.argmin(candidate_dist)
-                print("Counterfactual example found")
+                min_index = np.argsort(candidate_dist)[:self._k_directions]
+                print("Counterfactual examples found")
                 return candidate_counterfactuals[min_index]
 
-    def get_counterfactuals(self, factuals: pd.DataFrame) -> pd.DataFrame:
-        factuals = self._mlmodel.get_ordered_features(factuals)
+    def get_counterfactuals(self, poi: pd.DataFrame) -> pd.DataFrame:
+        cfs_np = self.counterfactual_search(self._step,poi)
+        return pd.DataFrame(cfs_np, columns = self._feature_columns)
 
-        encoded_feature_names = self._mlmodel.data.encoder.get_feature_names(
-            self._mlmodel.data.categorical
-        )
-        cat_features_indices = [
-            factuals.columns.get_loc(feature) for feature in encoded_feature_names
-        ]
+class CCHVAERecourse(RecourseInterface):
 
-        df_cfs = factuals.apply(
-            lambda x: self._counterfactual_search(
-                self._step, x.reshape((1, -1)), cat_features_indices
-            ),
-            raw=True,
-            axis=1,
-        )
+    def __init__(self, model: model_interface.ModelInterface, data_interface: data_interface.DataInterface,
+                k_directions: int, confidence_threshold: Optional[float] = None, 
+                random_seed = 0, train_vae = True, max_iterations: int = 50
+                ) -> None:
+        tf.random.set_seed(random_seed)
+        hyperparams = {
+            "data_name": data_interface.name,
+            "confidence_threshold": confidence_threshold,
+            "k_directions": k_directions,
+            "max_iter": max_iterations,
+            "vae_params": {
+                "train": train_vae,
+            } 
+        }
+        self._CCHVAE_instance = CCHVAE(model, data_interface, hyperparams)
+        
 
-        df_cfs = check_counterfactuals(self._mlmodel, df_cfs, factuals.index)
-        df_cfs = self._mlmodel.get_ordered_features(df_cfs)
-        return df_cfs
+    def get_counterfactuals(self, poi: pd.DataFrame) -> Sequence:
+        # TODO: write docstring.
+        cfs = self._CCHVAE_instance.get_counterfactuals(poi)
+        return cfs
+
+    def get_paths(self, poi: pd.DataFrame) -> Sequence:
+        # TODO: write docstring.
+        cfs = self.get_counterfactuals(poi)
+        cfs = [cfs.loc[[i]] for i in cfs.index] 
+        paths = []
+        for cf in cfs:
+            paths.append([poi, cf])
+        return paths
+    
+    def get_counterfactuals_from_paths(self, paths: Sequence) -> Sequence:
+        # TODO: write docstring.
+        cfs = []
+        for p in paths:
+            cfs.append(p[-1])
+        return cfs

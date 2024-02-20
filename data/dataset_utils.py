@@ -4,16 +4,16 @@ from aif360.sklearn.datasets import fetch_adult
 
 def get_dataset_interface_by_name(name: str) -> DataInterface:
     if name == "credit default":
-        return create_credit_default_interface()
+        return create_credit_default_interface(name)
     elif name == "give credit":
-        return create_give_credit_interface()
+        return create_give_credit_interface(name)
     elif name == "adult census":
-        return create_census_interface()
+        return create_census_interface(name)
     else:
         raise Exception("Invalid dataset name.")
 
 
-def create_credit_default_interface() -> DataInterface:
+def create_credit_default_interface(name) -> DataInterface:
     continuous_features = ["LIMIT_BAL", "AGE"]+[f"PAY_{i}" for i in range(
         1, 7)]+[f"BILL_AMT{i}" for i in range(1, 7)]+[f"PAY_AMT{i}" for i in range(1, 7)]
     ordinal_features = ["EDUCATION"]
@@ -36,10 +36,11 @@ def create_credit_default_interface() -> DataInterface:
     di = DataInterface(df, None, continuous_features, ordinal_features,
                            categorical_features, immutable_features, label_column,
                            pos_label=positive_label, dropped_columns=dropped_columns, 
-                           unidirection_features=unidirection_features, ordinal_features_order=ordinal_features_order)
+                           unidirection_features=unidirection_features, 
+                           ordinal_features_order=ordinal_features_order,data_name=name)
     return di
 
-def create_give_credit_interface() -> DataInterface:
+def create_give_credit_interface(name) -> DataInterface:
     continuous_features = [
         "RevolvingUtilizationOfUnsecuredLines",
         "age",
@@ -67,10 +68,11 @@ def create_give_credit_interface() -> DataInterface:
     di = DataInterface(df, None, continuous_features, ordinal_features,
                            categorical_features, immutable_features, label_column,
                            pos_label=positive_label, dropped_columns=dropped_columns, 
-                           unidirection_features=unidirection_features, ordinal_features_order=ordinal_features_order)
+                           unidirection_features=unidirection_features, ordinal_features_order=ordinal_features_order
+                           ,data_name=name)
     return di
 
-def create_census_interface():
+def create_census_interface(name):
     """
     Loads and preprocesses the Adult Census Income dataset using the AIF360 library.
     AIF360 data functions returns Pandas dataframes with the protected
@@ -100,5 +102,6 @@ def create_census_interface():
     di = DataInterface(df, None, continuous_features, ordinal_features,
                             categorical_features, immutable_features, label_column,
                             pos_label=positive_label, dropped_columns=dropped_columns, 
-                            unidirection_features=unidirection_features, ordinal_features_order=ordinal_features_order)
+                            unidirection_features=unidirection_features, 
+                            ordinal_features_order=ordinal_features_order,data_name=name)
     return di

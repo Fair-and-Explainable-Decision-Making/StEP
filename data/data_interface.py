@@ -17,7 +17,7 @@ class DataInterface():
                  target_feature: str, target_mapping: Any = None, encoding_method: str = "OneHot",
                  pos_label: int = 1, file_header_row: int = 0, dropped_columns: list = [],
                  unidirection_features: List[Sequence[str]] = ([], []),
-                 ordinal_features_order: dict = {}
+                 ordinal_features_order: dict = {}, data_name: str = "noname"
                  ):
         """
         Creates a data interface with the specified, continuous features, ordinal features, and categorical features.
@@ -66,6 +66,7 @@ class DataInterface():
         self._target_mapping = target_mapping
         self._encoding_method = encoding_method
         self._file_path = file_path
+        self.name = data_name
 
         if (file_path is None or file_path == "") and isinstance(data, pd.DataFrame):
             df = data

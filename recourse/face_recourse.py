@@ -84,6 +84,7 @@ class FACE():
         self._features_data = self._features_data.copy().reset_index(drop=True)
         self._labels_data = self._labels_data.copy().reset_index(drop=True)
         if graph_sample_size:
+            print(graph_sample_size)
             self._features_data = self._features_data.head(graph_sample_size)
             self._labels_data = self._labels_data.head(graph_sample_size)
         self.model = model
@@ -487,12 +488,13 @@ class FACERecourse(RecourseInterface):
                 weight_bias: float = 0,
                 use_train_data: bool = True,
                 graph_config: Mapping[str, Any] = None,
-                graph_sample_size: Optional[int] = None 
+                graph_sample_size: Optional[int] = None,
+                max_iterations = 50 
             ) -> None:
 
         self.FACE_instance = FACE(data_interface, model, k_directions, distance_threshold,
                 confidence_threshold, graph_filepath, counterfactual_mode,weight_bias,
-                use_train_data, graph_sample_size)
+                use_train_data, graph_sample_size,max_iterations=max_iterations)
         self._k_directions = k_directions
         self.FACE_instance.fit()
         self.FACE_instance.generate_graph(graph_filepath, graph_config)

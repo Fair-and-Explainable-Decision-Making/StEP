@@ -10,30 +10,7 @@ import torch.nn as nn
 #from carla import log
 import os
 
-
-def get_home(models_home=None):
-    """Return a path to the cache directory for trained autoencoders.
-
-    This directory is then used by :func:`save`.
-
-    If the ``models_home`` argument is not specified, it tries to read from the
-    ``CF_MODELS`` environment variable and defaults to ``~/cf-bechmark/models``.
-
-    """
-
-    if models_home is None:
-        models_home = os.environ.get(
-            "CF_MODELS", os.path.join("~", "carla", "models", "autoencoders")
-        )
-
-    models_home = os.path.expanduser(models_home)
-    if not os.path.exists(models_home):
-        os.makedirs(models_home)
-
-    return models_home
-
 tf.compat.v1.disable_eager_execution()
-
 
 class VariationalAutoencoder(nn.Module):
     def __init__(self, data_name: str, layers: List, mutable_mask):
@@ -65,12 +42,16 @@ class VariationalAutoencoder(nn.Module):
         for i in range(1, len(layers) - 1):
             lst_encoder.append(nn.Linear(layers[i - 1], layers[i]))
             lst_encoder.append(nn.ReLU())
+        #print(lst_encoder)
+        #print(layers)
         encoder = nn.Sequential(*lst_encoder)
 
         self._mu_enc = nn.Sequential(encoder, nn.Linear(layers[-2], latent_dim))
         self._log_var_enc = nn.Sequential(encoder, nn.Linear(layers[-2], latent_dim))
 
         # the decoder does use the immutables, so need to increase layer size accordingly.
+        #print(mutable_mask)
+        #print(~mutable_mask)
         layers[-1] += np.sum(~mutable_mask)
 
         lst_decoder = []
@@ -91,6 +72,7 @@ class VariationalAutoencoder(nn.Module):
         self.mutable_mask = mutable_mask
 
     def encode(self, x):
+        #print(x)
         return self._mu_enc(x), self._log_var_enc(x)
 
     def decode(self, z):
@@ -112,11 +94,14 @@ class VariationalAutoencoder(nn.Module):
         z = self.__reparametrization_trick(mu_z, log_var_z)
         # concatenate the immutable part to the latents and decode both
         z = torch.cat([z, x_immutable], dim=-1)
+        #print(z)
+        #print("zzzzzzzzzzzzzzzzzzz")
         recon = self.decode(z)
-
+        #print(recon)
         # add the immutable features to the reconstruction
         x[:, self.mutable_mask] = recon
-
+        #print("TEASTRASTAS")
+        #print(x)
         return x, mu_z, log_var_z
 
     def predict(self, data):
@@ -168,7 +153,6 @@ class VariationalAutoencoder(nn.Module):
 
                 # forward pass
                 reconstruction, mu, log_var = self(data)
-
                 recon_loss = criterion(reconstruction, data)
                 kld_loss = self.kld(mu, log_var)
                 loss = recon_loss + beta * kld_loss
@@ -200,13 +184,8 @@ class VariationalAutoencoder(nn.Module):
 
         self.eval()
 
-    def load(self, input_shape):
-        cache_path = get_home()
-
-        load_path = os.path.join(
-            cache_path,
-            "{}_{}.{}".format(self._data_name, input_shape, "pt"),
-        )
+    def load(self):
+        load_path ="recourse/saved vae/{}.{}".format(self._data_name, "pt")
 
         self.load_state_dict(torch.load(load_path))
 
@@ -215,11 +194,6 @@ class VariationalAutoencoder(nn.Module):
         return self
 
     def save(self):
-        cache_path = get_home()
-
-        save_path = os.path.join(
-            cache_path,
-            "{}_{}.{}".format(self._data_name, self._input_dim, "pt"),
-        )
+        save_path = "recourse/saved vae/{}.{}".format(self._data_name, "pt")
 
         torch.save(self.state_dict(), save_path)

@@ -67,6 +67,12 @@ class PyTorchModel:
             labels = labels.to_numpy()
         if not isinstance(self._model, nn.Module):
             raise Exception("Not a compatible PyTorch implementation.")
+
+        
+        _, counts = np.unique(labels, return_counts=True)
+        class_weights = torch.FloatTensor(len(labels)/ (counts * 2))
+        
+        self._criterion = nn.BCELoss(weight=class_weights)
         tensor_features = torch.Tensor(features)
         tensor_labels = torch.Tensor(labels.flatten())
         train_data = torch.utils.data.TensorDataset(
@@ -92,6 +98,7 @@ class PyTorchModel:
 
                 # forward + backward + optimize
                 outputs = model(inputs)
+                
                 loss = self._criterion(outputs, target.float())
                 loss.backward()
                 optimizer.step()
@@ -131,7 +138,7 @@ class PyTorchModel:
         if isinstance(features, pd.DataFrame) or isinstance(features, pd.Series):
             features = features.to_numpy()
         if not isinstance(features, torch.Tensor):
-            features = torch.Tensor(features)
+            features = torch.Tensor(features.astype(float))
         if grad:
             outputs = self._model(features)
         else:
