@@ -24,7 +24,13 @@ def compute_norm_path(path: list, ord: Union[float, int]) -> float:
 
 def compute_diversity(cfs: list) -> float:
     total = 0
+    if len(cfs)==0:
+        return np.nan
     for i in range(len(cfs)):
+        if cfs[i] is None or cfs[i] is np.nan:
+            return np.nan
         for j in range(i, len(cfs)):
+            if cfs[j] is None or cfs[j] is np.nan:
+                return np.nan
             total += compute_norm(cfs[i], cfs[j], 2)
     return total
