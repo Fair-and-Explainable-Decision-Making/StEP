@@ -68,7 +68,7 @@ class FACE():
         weight_bias: float = 0,
         use_train_data: bool = True,
         graph_sample_size: Optional[int] = None,
-        max_iterations = np.inf
+        max_iterations = 50
     ):
         """Creates a new FACE object.
 
