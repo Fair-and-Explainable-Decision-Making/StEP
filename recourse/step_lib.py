@@ -95,15 +95,16 @@ class StEP:
         immutable_feats = self._data_interface.get_processed_immutable_feats()
         cluster_data_filtered = cluster_data.copy()
         cluster_data_filtered[immutable_feats] = 0
-        poi[immutable_feats] = 0
-        diff = cluster_data_filtered.values - poi.values
+        poi_copy = poi.copy()
+        poi_copy[immutable_feats] = 0
+        diff = cluster_data_filtered.values - poi_copy.values
         dist = np.sqrt(np.power(diff, 2).sum(axis=1))
         alpha_val = self.volcano_alpha(dist)
         if np.isnan(alpha_val).any():
             raise RuntimeError(
                 f"Alpha function returned NaN values: {alpha_val}")
         direction = diff.T @ alpha_val
-        direction_df = poi.copy()
+        direction_df = poi_copy.copy()
         
         direction_df.iloc[0] = pd.Series(direction)
         
@@ -146,6 +147,8 @@ class StEP:
             new_poi = poi.copy()
             path = [new_poi]
             drct = d.to_frame().T
+            cluster_data = self.processed_data.loc[self.clusters_assignments[
+                    self.clusters_assignments["datapoint_cluster"] == cluster_index].index]
             for i in range(self.max_iterations):
                 new_poi = new_poi.add(drct, fill_value=0)
 
@@ -160,8 +163,6 @@ class StEP:
                 path.append(new_poi)
                 if self._model.predict_proba(new_poi, pos_label_only=True)[0][0] >= self._confidence_threshold:
                     break
-                cluster_data = self.processed_data.loc[self.clusters_assignments[
-                    self.clusters_assignments["datapoint_cluster"] == cluster_index].index]
                 drct = self.compute_direction(new_poi, cluster_data, noise)
             return path
         directions = self.compute_all_directions(poi, noise)
