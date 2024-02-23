@@ -14,7 +14,7 @@ from joblib import Parallel, delayed
 import torch
 import random
 import pathlib
-
+import json
 
 def run_experiments_trials(arguments: dict) -> Tuple[dict, dict]:
     start_trials = time.time()
@@ -47,7 +47,7 @@ def run_experiments_trials(arguments: dict) -> Tuple[dict, dict]:
                 result_i[2][recourse_method][0])
     print(recourse_results_trials_dict)
     save_results_dict(arguments,recourse_results_trials_dict)
-    save_results_dict(arguments,pf_recourse_results_trials_dict,f_name_prefix="partfail_")
+    save_results_dict(arguments,pf_recourse_results_trials_dict,f_name_prefix="partial_failed_")
     end_trials = time.time()
     print("All trials took", end_trials-start_trials, "seconds.")
 
@@ -68,9 +68,9 @@ def save_results_dict(arguments, results_dict, f_name_prefix = ""):
             rc_dir_str = "results/{}/{}/{}/{}".format(arguments["experiment name"],
                 arguments["dataset name"], arguments["base model"]["name"],recourse_name).replace(" ", "")
             pathlib.Path(rc_dir_str).mkdir(parents=True, exist_ok=True) 
-            recourse_results[recourse_name].to_csv(rc_dir_str+'/'+f_name_prefix+'trial_results.csv', index=False)
-            agg_recourse_results[recourse_name].to_csv(rc_dir_str+'/'+f_name_prefix+'agg.csv', index=False)
-            agg_recourse_results_err[recourse_name].to_csv(rc_dir_str+'/'+f_name_prefix+'agg_err.csv', index=False)
+            recourse_results[recourse_name].to_csv(rc_dir_str+'/'+f_name_prefix+'all_trials_results.csv', index=False)
+            agg_recourse_results[recourse_name].to_csv(rc_dir_str+'/'+f_name_prefix+'agg_all_trials_results.csv', index=False)
+            agg_recourse_results_err[recourse_name].to_csv(rc_dir_str+'/'+f_name_prefix+'agg_all_trials_err.csv', index=False)
 
 def run_experiments_one_trial(arguments, trial_num=0):
     file_str = "{}_{}_dataset_{}_model_{}_trialnum".format(arguments["experiment name"],
@@ -99,7 +99,13 @@ def run_experiments_one_trial(arguments, trial_num=0):
         model_interface.save_model("models/saved models/"+file_str)
     preds = pd.Series(model_interface.predict(
         feats_test), index=feats_test.index)
-    neg_data = feats_test.loc[preds[preds != 1].index].head(1000)
+    if 'max num neg samples' in arguments.keys():
+        n_neg_samples = arguments['max num neg samples']
+    else:
+        n_neg_samples = 1000
+        arguments['max num neg samples'] = n_neg_samples
+    neg_data = feats_test.loc[preds[preds != 1].index].head(n_neg_samples)
+    actual_n_neg_samples = neg_data.shape[0]
     print(neg_data.shape)
     # TODO: change this to output to a text file or something similar
     base_model_results = classifier_metrics.run_classifier_tests(labels_test, model_interface.predict(feats_test))
@@ -140,21 +146,22 @@ def run_experiments_one_trial(arguments, trial_num=0):
             df_results = pd.DataFrame.from_dict(
                 dict(zip(recourse_results.index, recourse_results.values))).T
             df_results.rename(columns={0: "l2_path_len", 1: "l2_prox", 2: "l2_path_steps",
-                                    3: "poi_id", 4: "part_failures", 5: "any_path_failed", 6: "diversity"}, inplace=True)
+                                    3: "poi_id", 4: "path_failures", 5: "any_path_failed", 6: "diversity"}, inplace=True)
             print(trial_num)
             print(df_results)
             print(df_results[df_results.stack().str.len().lt(k_directions).any(level=0)])
             df_results = df_results.explode(df_results.columns.values.tolist())
-            df_results.to_csv(rc_dir_str+"/noagg_trial_{}".format(trial_num).replace(" ", "")+'.csv', index=False)
+            df_results.to_csv(rc_dir_str+"/no_agg_trial_{}".format(trial_num).replace(" ", "")+'.csv', index=False)
             end_recourse = time.time()
             df_results["time"] = end_recourse - start_recourse
+            df_results["n_neg_samples"] = actual_n_neg_samples
             #df_agg = df_results.copy().groupby('poi_id').filter(lambda x: len(x) < k_directions)
             #df_agg = df_agg[df_agg['failures'].apply(lambda x: sum(x) == k_directions)]
             
             df_agg = df_results.copy().loc[df_results['any_path_failed'] == 0]
             df_min = df_agg.copy().groupby("poi_id").min().add_prefix('min_').reset_index().mean(axis=0).to_frame().T.drop(columns=['poi_id'])
             df_max = df_agg.copy().groupby("poi_id").max().add_prefix('max_').reset_index().mean(axis=0).to_frame().T.drop(columns=['poi_id'])
-            cols_to_drop = ['poi_id','min_diversity','max_diversity','min_time','max_time','min_any_path_failed','max_any_path_failed']
+            cols_to_drop = ['poi_id','min_diversity','max_diversity','min_time','max_time','min_any_path_failed','max_any_path_failed','min_n_neg_samples','max_n_neg_samples']
             df_agg = df_agg.mean(axis=0).to_frame().T
             df_agg = pd.concat([df_agg, df_min, df_max], axis=1).drop(columns=cols_to_drop)
             df_agg["any_path_failed"] = df_results["any_path_failed"].mean()
@@ -169,13 +176,11 @@ def run_experiments_one_trial(arguments, trial_num=0):
                 start_recourse, "seconds for", len(neg_data), "samples.")
             rc_dir_str = "results/{}/{}/{}/{}/trials".format(arguments["experiment name"],
                 arguments["dataset name"], arguments["base model"]["name"],recourse_name).replace(" ", "")
-            results_file_str = rc_dir_str+"/agg_trial_{}".format(trial_num).replace(" ", "")
+            results_file_str = rc_dir_str+"/agg_results_trial_{}".format(trial_num).replace(" ", "")
             df_agg.to_csv(results_file_str+'.csv', index=False)
-            results_file_str = rc_dir_str+"/partfail_agg_trial_{}".format(trial_num).replace(" ", "")
+            results_file_str = rc_dir_str+"/partial_failed_agg_results_trial_{}".format(trial_num).replace(" ", "")
             df_agg_partialfail.to_csv(results_file_str+'.csv', index=False)
     end_trial = time.time()
-    print("Trial", trial_num, "took", end_trial-start_trial, "seconds.")
-    
     return recourse_results_dict, base_model_results, recourse_partialfail_results_dict
 
 
@@ -281,10 +286,57 @@ if __name__ == "__main__":
         "dataset scaler": "Standard",
         "dataset valid-test split": [0.15, 0.15],
         "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
+        "recourse methods": {"StEP": {'k_directions':2, 'max_iterations':50, 'confidence_threshold':0.7,
+                'directions_rescaler': "constant step size", 'step_size': 1.0}},
+        "save results": True,
+        "save experiment": True,
+        "experiment name": "immutcat2clustanyedu",
+    }
+    all_results = run_experiments_trials(arguments)
+    arguments = {
+        "n jobs": 1,
+        "trials": 1,
+        "dataset name": "adult census",
+        "dataset encoded": "OneHot",
+        "dataset scaler": "Standard",
+        "dataset valid-test split": [0.15, 0.15],
+        "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
         "recourse methods": {"StEP": {'k_directions':3, 'max_iterations':50, 'confidence_threshold':0.7,
                 'directions_rescaler': "constant step size", 'step_size': 1.0}},
         "save results": True,
         "save experiment": True,
-        "experiment name": "forcfixedtestingmutcat"
+        "experiment name": "immutcat3clustanyedu"
+    }
+    all_results = run_experiments_trials(arguments)
+    
+    arguments = {
+        "n jobs": 1,
+        "trials": 1,
+        "dataset name": "adult census",
+        "dataset encoded": "OneHot",
+        "dataset scaler": "Standard",
+        "dataset valid-test split": [0.15, 0.15],
+        "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
+        "recourse methods": {"StEP": {'k_directions':4, 'max_iterations':50, 'confidence_threshold':0.7,
+                'directions_rescaler': "constant step size", 'step_size': 1.0}},
+        "save results": True,
+        "save experiment": True,
+        "experiment name": "immutcat4clustanyedu"
+    }
+    all_results = run_experiments_trials(arguments)
+
+    arguments = {
+        "n jobs": 1,
+        "trials": 1,
+        "dataset name": "adult census",
+        "dataset encoded": "OneHot",
+        "dataset scaler": "Standard",
+        "dataset valid-test split": [0.15, 0.15],
+        "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
+        "recourse methods": {"StEP": {'k_directions':5, 'max_iterations':50, 'confidence_threshold':0.7,
+                'directions_rescaler': "constant step size", 'step_size': 1.0}},
+        "save results": True,
+        "save experiment": True,
+        "experiment name": "immutcat5clustanyedu"
     }
     all_results = run_experiments_trials(arguments)
