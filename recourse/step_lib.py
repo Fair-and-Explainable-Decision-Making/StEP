@@ -154,11 +154,12 @@ class StEP:
 
                 if self._data_interface.categorical_features:
                     for feat_name, one_hot_feat_names in self._data_interface.get_encoded_categorical_feats().items():
-                        one_hot_feats_constrained = np.zeros_like(
-                            new_poi[one_hot_feat_names].values)
-                        one_hot_feats_constrained[np.arange(len(new_poi[one_hot_feat_names])),
-                                                  new_poi[one_hot_feat_names].values.argmax(1)] = 1
-                        new_poi[one_hot_feat_names] = one_hot_feats_constrained
+                        if len(one_hot_feat_names)>1:
+                            one_hot_feats_constrained = np.zeros_like(
+                                new_poi[one_hot_feat_names].values)
+                            one_hot_feats_constrained[np.arange(len(new_poi[one_hot_feat_names])),
+                                                    new_poi[one_hot_feat_names].values.argmax(1)] = 1
+                            new_poi[one_hot_feat_names] = one_hot_feats_constrained
 
                 path.append(new_poi)
                 if self._model.predict_proba(new_poi, pos_label_only=True)[0][0] >= self._confidence_threshold:
