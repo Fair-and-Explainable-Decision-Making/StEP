@@ -19,7 +19,7 @@ def get_recourse_interface_by_name(recourse_name: str, model_interface: ModelInt
     elif recourse_name == "FACE":
         return FACERecourse(model_interface, data_interface, k_directions=kwargs['k_directions'], distance_threshold=kwargs['direction_threshold'], 
                             confidence_threshold=kwargs['confidence_threshold'],weight_bias=kwargs['weight_bias'],graph_sample_size=20000,max_iterations=kwargs['max_iterations'])
-    elif recourse_name == "cchvae":
+    elif recourse_name == "CCHVAE":
         return CCHVAERecourse(model_interface, data_interface, k_directions=kwargs['k_directions'], confidence_threshold=kwargs['confidence_threshold'],
                               max_iterations=kwargs['max_iterations'],random_seed=kwargs['random seed'],train_vae=kwargs['train vae'])
     else:

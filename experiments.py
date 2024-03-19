@@ -1,3 +1,4 @@
+import csv
 import pandas as pd
 from typing import Tuple
 
@@ -31,12 +32,12 @@ def run_experiments_trials(arguments: dict) -> Tuple[dict, dict]:
     base_model_results_agg_err = (base_model_results.std(axis=0)/(np.sqrt(len(base_model_results)))).to_frame().T
     base_model_results_agg = (base_model_results.mean(axis=0)).to_frame().T
     if arguments["save results"]:
-            bm_dir_str = "results/{}/{}/{}".format(arguments["experiment name"],
+            base_model_dir = "results/{}/{}/{}".format(arguments["experiment name"],
                 arguments["dataset name"], arguments["base model"]["name"]).replace(" ", "")
-            pathlib.Path(bm_dir_str).mkdir(parents=True, exist_ok=True) 
-            base_model_results.to_csv(bm_dir_str+"/"+arguments["base model"]["name"]+'_results.csv', index=False)
-            base_model_results_agg.to_csv(bm_dir_str+"/"+arguments["base model"]["name"]+'_agg.csv', index=False)
-            base_model_results_agg_err.to_csv(bm_dir_str+"/"+arguments["base model"]["name"]+'_agg_err.csv', index=False)
+            pathlib.Path(base_model_dir).mkdir(parents=True, exist_ok=True) 
+            base_model_results.to_csv(base_model_dir+"/"+arguments["base model"]["name"]+'_results.csv', index=False)
+            base_model_results_agg.to_csv(base_model_dir+"/"+arguments["base model"]["name"]+'_agg.csv', index=False)
+            base_model_results_agg_err.to_csv(base_model_dir+"/"+arguments["base model"]["name"]+'_agg_err.csv', index=False)
     for recourse_method in recourse_methods:
         recourse_results_trials_dict[recourse_method] = []
         pf_recourse_results_trials_dict[recourse_method] = []
@@ -60,17 +61,21 @@ def save_results_dict(arguments, results_dict, f_name_prefix = ""):
     agg_recourse_results_err = {}
     for recourse_name, results in results_dict.items():
         results = pd.concat(results, ignore_index=True)
-        recourse_results[recourse_name] = results
+        results["recourse_name"] = recourse_name
+        recourse_results[recourse_name] = results.copy()
         agg_recourse_results_err[recourse_name] = (results.std(axis=0)/(np.sqrt(len(results)))).to_frame().T
         agg_recourse_results[recourse_name] = (results.mean(axis=0)).to_frame().T
         #TODO: go into folder
         if arguments["save results"]:
-            rc_dir_str = "results/{}/{}/{}/{}".format(arguments["experiment name"],
+            recourse_results[recourse_name]["recourse_name"] = recourse_name
+            agg_recourse_results_err[recourse_name]["recourse_name"] = recourse_name
+            agg_recourse_results[recourse_name]["recourse_name"] = recourse_name
+            recourse_dir = "results/{}/{}/{}/{}".format(arguments["experiment name"],
                 arguments["dataset name"], arguments["base model"]["name"],recourse_name).replace(" ", "")
-            pathlib.Path(rc_dir_str).mkdir(parents=True, exist_ok=True) 
-            recourse_results[recourse_name].to_csv(rc_dir_str+'/'+f_name_prefix+'all_trials_results.csv', index=False)
-            agg_recourse_results[recourse_name].to_csv(rc_dir_str+'/'+f_name_prefix+'agg_all_trials_results.csv', index=False)
-            agg_recourse_results_err[recourse_name].to_csv(rc_dir_str+'/'+f_name_prefix+'agg_all_trials_err.csv', index=False)
+            pathlib.Path(recourse_dir).mkdir(parents=True, exist_ok=True) 
+            recourse_results[recourse_name].to_csv(recourse_dir+'/'+f_name_prefix+'all_trials_results.csv', index=False)
+            agg_recourse_results[recourse_name].to_csv(recourse_dir+'/'+f_name_prefix+'agg_all_trials_results.csv', index=False)
+            agg_recourse_results_err[recourse_name].to_csv(recourse_dir+'/'+f_name_prefix+'agg_all_trials_err.csv', index=False)
 
 def run_experiments_one_trial(arguments, trial_num=0):
     file_str = "{}_{}_dataset_{}_model_{}_trialnum".format(arguments["experiment name"],
@@ -102,7 +107,7 @@ def run_experiments_one_trial(arguments, trial_num=0):
     if 'max num neg samples' in arguments.keys():
         n_neg_samples = arguments['max num neg samples']
     else:
-        n_neg_samples = 1000
+        n_neg_samples = 100
         arguments['max num neg samples'] = n_neg_samples
     neg_data = feats_test.loc[preds[preds != 1].index].head(n_neg_samples)
     actual_n_neg_samples = neg_data.shape[0]
@@ -127,10 +132,10 @@ def run_experiments_one_trial(arguments, trial_num=0):
             recourse_interface = get_recourse_interface_by_name(
                 recourse_name, model_interface, data_interface, **recourse_args)
             k_directions = recourse_args['k_directions']
-            rc_dir_str = "results/{}/{}/{}/{}/trials".format(arguments["experiment name"],
+            recourse_dir = "results/{}/{}/{}/{}/trials".format(arguments["experiment name"],
                 arguments["dataset name"], arguments["base model"]["name"],recourse_name).replace(" ", "")
-            pathlib.Path(rc_dir_str).mkdir(parents=True, exist_ok=True) 
-            results_file_str = rc_dir_str+"/paths_trial_{}".format(trial_num).replace(" ", "")
+            pathlib.Path(recourse_dir).mkdir(parents=True, exist_ok=True) 
+            results_file_str = recourse_dir+"/paths_trial_{}".format(trial_num).replace(" ", "")
             global path_df_li 
             path_df_li = []
             
@@ -151,7 +156,7 @@ def run_experiments_one_trial(arguments, trial_num=0):
             print(df_results)
             print(df_results[df_results.stack().str.len().lt(k_directions).any(level=0)])
             df_results = df_results.explode(df_results.columns.values.tolist())
-            df_results.to_csv(rc_dir_str+"/no_agg_trial_{}".format(trial_num).replace(" ", "")+'.csv', index=False)
+            #df_results.to_csv(recourse_dir+"/no_agg_trial_{}".format(trial_num).replace(" ", "")+'.csv', index=False)
             end_recourse = time.time()
             df_results["time"] = end_recourse - start_recourse
             df_results["n_neg_samples"] = actual_n_neg_samples
@@ -161,6 +166,7 @@ def run_experiments_one_trial(arguments, trial_num=0):
             df_agg = df_results.copy().loc[df_results['any_path_failed'] == 0]
             df_min = df_agg.copy().groupby("poi_id").min().add_prefix('min_').reset_index().mean(axis=0).to_frame().T.drop(columns=['poi_id'])
             df_max = df_agg.copy().groupby("poi_id").max().add_prefix('max_').reset_index().mean(axis=0).to_frame().T.drop(columns=['poi_id'])
+            #TODO variance group by
             cols_to_drop = ['poi_id','min_diversity','max_diversity','min_time','max_time','min_any_path_failed','max_any_path_failed','min_n_neg_samples','max_n_neg_samples']
             df_agg = df_agg.mean(axis=0).to_frame().T
             df_agg = pd.concat([df_agg, df_min, df_max], axis=1).drop(columns=cols_to_drop)
@@ -174,11 +180,11 @@ def run_experiments_one_trial(arguments, trial_num=0):
             recourse_partialfail_results_dict[recourse_name].append(df_agg_partialfail)
             print(recourse_name, "recourse took", end_recourse -
                 start_recourse, "seconds for", len(neg_data), "samples.")
-            rc_dir_str = "results/{}/{}/{}/{}/trials".format(arguments["experiment name"],
+            recourse_dir = "results/{}/{}/{}/{}/trials".format(arguments["experiment name"],
                 arguments["dataset name"], arguments["base model"]["name"],recourse_name).replace(" ", "")
-            results_file_str = rc_dir_str+"/agg_results_trial_{}".format(trial_num).replace(" ", "")
+            results_file_str = recourse_dir+"/agg_results_trial_{}".format(trial_num).replace(" ", "")
             df_agg.to_csv(results_file_str+'.csv', index=False)
-            results_file_str = rc_dir_str+"/partial_failed_agg_results_trial_{}".format(trial_num).replace(" ", "")
+            results_file_str = recourse_dir+"/partial_failed_agg_results_trial_{}".format(trial_num).replace(" ", "")
             df_agg_partialfail.to_csv(results_file_str+'.csv', index=False)
     end_trial = time.time()
     return recourse_results_dict, base_model_results, recourse_partialfail_results_dict
@@ -278,65 +284,44 @@ if __name__ == "__main__":
             for your recourse methods.
     """
     #TODO: renaming saving
-    arguments = {
-        "n jobs": 1,
-        "trials": 1,
-        "dataset name": "adult census",
-        "dataset encoded": "OneHot",
-        "dataset scaler": "Standard",
-        "dataset valid-test split": [0.15, 0.15],
-        "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
-        "recourse methods": {"StEP": {'k_directions':2, 'max_iterations':50, 'confidence_threshold':0.7,
-                'directions_rescaler': "constant step size", 'step_size': 1.0}},
-        "save results": True,
-        "save experiment": True,
-        "experiment name": "immutcat2clustanyedu",
-    }
-    all_results = run_experiments_trials(arguments)
-    arguments = {
-        "n jobs": 1,
-        "trials": 1,
-        "dataset name": "adult census",
-        "dataset encoded": "OneHot",
-        "dataset scaler": "Standard",
-        "dataset valid-test split": [0.15, 0.15],
-        "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
-        "recourse methods": {"StEP": {'k_directions':3, 'max_iterations':50, 'confidence_threshold':0.7,
-                'directions_rescaler': "constant step size", 'step_size': 1.0}},
-        "save results": True,
-        "save experiment": True,
-        "experiment name": "immutcat3clustanyedu"
-    }
-    all_results = run_experiments_trials(arguments)
     
-    arguments = {
-        "n jobs": 1,
-        "trials": 1,
-        "dataset name": "adult census",
-        "dataset encoded": "OneHot",
-        "dataset scaler": "Standard",
-        "dataset valid-test split": [0.15, 0.15],
-        "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
-        "recourse methods": {"StEP": {'k_directions':4, 'max_iterations':50, 'confidence_threshold':0.7,
-                'directions_rescaler': "constant step size", 'step_size': 1.0}},
-        "save results": True,
-        "save experiment": True,
-        "experiment name": "immutcat4clustanyedu"
-    }
-    all_results = run_experiments_trials(arguments)
+    for k in range(3,6):
+        for step_size in [0.1, 0.25, 0.5, 0.75, 1.0]:
+            for conf_thres in [0.5, 0.55, 0.6, 0.65, 0.7]:
+                expnam = f"results/{k}Clust_{str(step_size)}StepSize_{str(conf_thres)}ConfThres"
 
-    arguments = {
-        "n jobs": 1,
-        "trials": 1,
-        "dataset name": "adult census",
-        "dataset encoded": "OneHot",
-        "dataset scaler": "Standard",
-        "dataset valid-test split": [0.15, 0.15],
-        "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
-        "recourse methods": {"StEP": {'k_directions':5, 'max_iterations':50, 'confidence_threshold':0.7,
-                'directions_rescaler': "constant step size", 'step_size': 1.0}},
-        "save results": True,
-        "save experiment": True,
-        "experiment name": "immutcat5clustanyedu"
-    }
-    all_results = run_experiments_trials(arguments)
+                arguments = {
+                    "n jobs": 10,
+                    "trials": 10,
+                    "dataset name": "adult census",
+                    "dataset encoded": "OneHot",
+                    "dataset scaler": "Standard",
+                    "dataset valid-test split": [0.15, 0.15],
+                    "base model": {"name": "LogisticRegressionSK", "load model": False, "save model": False},
+                    "recourse methods": {"StEP": {'k_directions':k, 'max_iterations':50, 'confidence_threshold':conf_thres,
+                            'directions_rescaler': "constant step size", 'step_size': step_size}},
+                    "save results": True,
+                    "save experiment": True,
+                    "experiment name": expnam
+                }
+                all_results = run_experiments_trials(arguments)
+
+    df_li = []
+    for k in range(3,6):
+        for step_size in [0.1, 0.25, 0.5, 0.75, 1.0]:
+            for conf_thres in [0.5, 0.55, 0.6, 0.65, 0.7]:
+                expnam = f"results/{k}Clust_{str(step_size)}StepSize_{str(conf_thres)}ConfThres"
+                print(expnam)
+                fname = "/adultcensus/LogisticRegressionSK/StEP/partial_failed_agg_all_trials_results.csv"
+                csv_loc = expnam+fname
+                df = pd.read_csv(csv_loc)
+                df['k'] = k
+                df['step_size'] = step_size
+                df['conf_thres'] = conf_thres
+                df_li.append(df)
+    df = pd.concat(df_li,ignore_index=True)
+    cols = df.columns.tolist()
+    cols = cols[-4:] + cols[:-4]
+    df = df[cols]
+    print(df)
+    df.to_csv('results/adult_hyperparam.csv')  

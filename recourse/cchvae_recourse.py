@@ -7,6 +7,7 @@ from numpy import linalg as LA
 from models import model_interface
 from data import data_interface
 from recourse.recourse_interface import RecourseInterface
+from data.data_interface import DataInterface
 from typing import Optional, Sequence
 from sklearn.preprocessing import MinMaxScaler
 import tensorflow as tf
@@ -14,13 +15,22 @@ import tensorflow as tf
 #from carla import log
 #from carla.models.api import MLModel
 
-from recourse.utils.recourse_utils import constrain_one_hot_cat_features
 from recourse.utils.vae import VariationalAutoencoder
 from recourse.utils.carla_utils import (
     merge_default_parameters,
     reconstruct_encoding_constraints,
 )
 
+def constrain_one_hot_cat_features(poi: pd.DataFrame, data_interface: DataInterface):
+    if isinstance(poi,pd.Series):
+        poi = poi.to_frame().T 
+    for feat_name, one_hot_feat_names in data_interface.get_encoded_categorical_feats().items():
+        one_hot_feats_constrained = np.zeros_like(
+            poi[one_hot_feat_names].values)
+        one_hot_feats_constrained[np.arange(len(poi[one_hot_feat_names])),
+                                    poi[one_hot_feat_names].values.argmax(1)] = 1
+        poi[one_hot_feat_names] = one_hot_feats_constrained
+    return poi
 
 class CCHVAE():
     """
@@ -80,9 +90,9 @@ class CCHVAE():
 
     _DEFAULT_HYPERPARAMS = {
         "data_name": None,
-        "n_search_samples": 300,
-        "p_norm": 1,
-        "step": 0.1,
+        "n_search_samples": 1000,
+        "p_norm": 2,
+        "step": 1.0,
         "max_iter": 1000,
         "clamp": True,
         "binary_cat_features": True,
@@ -283,8 +293,9 @@ class CCHVAERecourse(RecourseInterface):
                 random_seed = 0, train_vae = True, max_iterations: int = 50
                 ) -> None:
         tf.random.set_seed(random_seed)
+        data_name = (data_interface.name+"_"+str(random_seed)).replace(" ", "")
         hyperparams = {
-            "data_name": data_interface.name,
+            "data_name": data_name,
             "confidence_threshold": confidence_threshold,
             "k_directions": k_directions,
             "max_iter": max_iterations,

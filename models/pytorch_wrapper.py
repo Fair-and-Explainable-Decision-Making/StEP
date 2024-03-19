@@ -68,9 +68,9 @@ class PyTorchModel:
         if not isinstance(self._model, nn.Module):
             raise Exception("Not a compatible PyTorch implementation.")
 
-        
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         _, counts = np.unique(labels, return_counts=True)
-        class_weights = torch.FloatTensor(len(labels)/ (counts * 2))
+        class_weights = torch.FloatTensor(len(labels)/ (counts * 2)).to(device)
         
         self._criterion = nn.BCELoss(weight=class_weights)
         tensor_features = torch.Tensor(features)
@@ -80,7 +80,6 @@ class PyTorchModel:
         trainloader = torch.utils.data.DataLoader(
             train_data, batch_size=self._batch_size)
 
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model = self._model.to(device)
 
         optimizer = optim.Adam(model.parameters(), lr=self._lr)
@@ -92,14 +91,14 @@ class PyTorchModel:
                 inputs, target = train_data
                 inputs = inputs.to(device)
                 target = torch.nn.functional.one_hot(
-                    target.to(device).type(torch.int64), num_classes=2)
+                    target.to(device).type(torch.int64), num_classes=2).float().to(device)
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
                 # forward + backward + optimize
-                outputs = model(inputs)
+                outputs = model(inputs).to(device)
                 
-                loss = self._criterion(outputs, target.float())
+                loss = self._criterion(outputs, target)
                 loss.backward()
                 optimizer.step()
 
@@ -139,12 +138,14 @@ class PyTorchModel:
             features = features.to_numpy()
         if not isinstance(features, torch.Tensor):
             features = torch.Tensor(features.astype(float))
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        features = features.to(device)
         if grad:
             outputs = self._model(features)
         else:
             with torch.no_grad():
                 outputs = self._model(features)
-        return outputs.numpy()
+        return outputs.cpu().numpy()
 
     def predict(self, features):
         """
