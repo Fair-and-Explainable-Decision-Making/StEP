@@ -132,7 +132,7 @@ class StEP:
         direction_df[direction_df[self._data_interface.unidirection_features[0]] > 0] = 0
         direction_df[direction_df[self._data_interface.unidirection_features[1]] < 0] = 0
         #noise for experiments
-        if noise:
+        if noise is not None:
             direction_df = self.randomly_perturb_direction(direction_df,noise,immutable_feats)
 
         return direction_df
@@ -141,7 +141,7 @@ class StEP:
         # TODO: write docstring.
         # TODO: please consider parallelizing this / avoiding looping over the directions
         # on a per-PoI basis. This will be the big computational bottleneck.
-        def compute_path(d, poi):
+        def compute_path(d, poi,noise):
             cluster_index = d["cluster_index"]
             d = d.drop(labels="cluster_index")
             new_poi = poi.copy()
@@ -168,7 +168,7 @@ class StEP:
             return path
         directions = self.compute_all_directions(poi, noise)
         directions["path"] = directions.apply(
-            lambda d: compute_path(d, poi), axis=1)
+            lambda d: compute_path(d, poi,noise), axis=1)
         return directions["path"].values
     
     def get_clusters(self):
@@ -219,23 +219,27 @@ class StEP:
             perturbed direction.
         """
         new_direction = direction.copy()
-        new_direction[immutable_feats] = 0
-        new_direction[self._data_interface.categorical_features] = 0
-        new_direction[self._data_interface.ordinal_features] = 0
+        new_direction[self._data_interface.get_processed_immutable_feats()] = 0.0
+        for feat_name, one_hot_feat_names in self._data_interface.get_encoded_categorical_feats().items():
+            new_direction[one_hot_feat_names] = 0.0
+        new_direction[self._data_interface.ordinal_features] = 0.0
         # Check for zeroes to avoid division by zero.
         direction_norm = np.linalg.norm(new_direction)
         if direction_norm == 0:
             return new_direction
-        noise = np.random.normal(0, 1, len(new_direction))
+        noise = np.random.normal(0, 1, new_direction.shape[1])
         noise_norm = np.linalg.norm(noise)
         if noise_norm == 0:
             return new_direction
-
         noise = (noise / noise_norm) * ratio * direction_norm
-        new_direction = new_direction + noise
+        new_direction = direction.copy() + noise
         # Normalize noised direction and rescale to the original direction length.
         new_direction = (new_direction / np.linalg.norm(new_direction)
                          ) * direction_norm
+        new_direction[self._data_interface.get_processed_immutable_feats()] = direction.copy()[self._data_interface.get_processed_immutable_feats()]
+        for feat_name, one_hot_feat_names in self._data_interface.get_encoded_categorical_feats().items():
+            new_direction[one_hot_feat_names] = direction.copy()[one_hot_feat_names]
+        new_direction[self._data_interface.ordinal_features] = direction.copy()[self._data_interface.ordinal_features]
         return new_direction
 
 class StEPRecourse(RecourseInterface):
@@ -246,23 +250,23 @@ class StEPRecourse(RecourseInterface):
     def __init__(self, model: model_interface.ModelInterface, data_interface: data_interface.DataInterface,
                  num_clusters: int, max_iterations: int, use_train_data: bool = True,
                  confidence_threshold: Optional[float] = None, random_seed: Optional[int] = None, step_size=None,
-                 directions_rescaler="normalize", special_cluster_data = None
+                 directions_rescaler="normalize", special_cluster_data = None, noise = None
                  ) -> None:
 
         self.StEP_instance = StEP(num_clusters, data_interface, model, max_iterations, use_train_data,
                                   confidence_threshold, random_seed, step_size, directions_rescaler,special_cluster_data)
-
-    def get_counterfactuals(self, poi: pd.DataFrame, noise: float = None) -> Sequence:
+        self.noise = noise
+    def get_counterfactuals(self, poi: pd.DataFrame) -> Sequence:
         # TODO: write docstring.
         cfs = []
-        paths = self.StEP_instance.compute_all_paths(poi, noise)
+        paths = self.StEP_instance.compute_all_paths(poi, self.noise)
         for p in paths:
             cfs.append(p[-1])
         return cfs
 
     def get_paths(self, poi: pd.DataFrame, noise: float = None) -> Sequence:
         # TODO: write docstring.
-        return self.StEP_instance.compute_all_paths(poi, noise)
+        return self.StEP_instance.compute_all_paths(poi, self.noise)
     
     def get_counterfactuals_from_paths(self, paths: Sequence) -> Sequence:
         # TODO: write docstring.

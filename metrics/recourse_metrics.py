@@ -22,15 +22,21 @@ def compute_norm_path(path: list, ord: Union[float, int]) -> float:
     return total
 
 
-def compute_diversity(cfs: list) -> float:
+def compute_diversity(poi: pd.DataFrame,cfs: list) -> float:
     total = 0
     if len(cfs)==0:
         return np.nan
+    max_norm = 0
+    nan_ct = 0
     for i in range(len(cfs)):
         if cfs[i] is None or cfs[i] is np.nan:
-            return np.nan
-        for j in range(i, len(cfs)):
-            if cfs[j] is None or cfs[j] is np.nan:
+            nan_ct +=1
+            if nan_ct >= len(cfs) - 1:
                 return np.nan
-            total += compute_norm(cfs[i], cfs[j], 2)
-    return total
+        else:
+            if max_norm < compute_norm(poi, cfs[i], ord=2):
+                max_norm = compute_norm(poi, cfs[i], ord=2)
+            for j in range(i, len(cfs)):
+                if not (cfs[j] is None or cfs[j] is np.nan):
+                    total += compute_norm(cfs[i], cfs[j], 2)
+    return total/max_norm

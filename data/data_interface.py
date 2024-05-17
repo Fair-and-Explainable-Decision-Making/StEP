@@ -17,7 +17,7 @@ class DataInterface():
                  target_feature: str, target_mapping: Any = None, encoding_method: str = "OneHot",
                  pos_label: int = 1, file_header_row: int = 0, dropped_columns: list = [],
                  unidirection_features: List[Sequence[str]] = ([], []),
-                 ordinal_features_order: dict = {}, data_name: str = "noname"
+                 ordinal_features_order: dict = {}, data_name: str = "noname", prot_attrs = []
                  ):
         """
         Creates a data interface with the specified, continuous features, ordinal features, and categorical features.
@@ -67,6 +67,7 @@ class DataInterface():
         self._encoding_method = encoding_method
         self._file_path = file_path
         self.name = data_name
+        self._prot_attrs = prot_attrs 
 
         if (file_path is None or file_path == "") and isinstance(data, pd.DataFrame):
             df = data
@@ -194,8 +195,14 @@ class DataInterface():
             encoded_cat_feats, key=lambda x: re.match('(.*)(_[^_]+)', x).group(1))}
         
         self._encoded_immutable_features = self._immutable_features.copy()
+        self._prot_attr_cat_features = []
         for feat_name, one_hot_feat_names in self.get_encoded_categorical_feats().items():
-                if feat_name in self._immutable_features:
+                if feat_name in self._immutable_features and feat_name in self._prot_attrs:
+                    self._encoded_immutable_features.remove(feat_name)
+                    for name in one_hot_feat_names:
+                        self._encoded_immutable_features.append(name)
+                        self._prot_attr_cat_features.append(name)
+                elif feat_name in self._immutable_features:
                     self._encoded_immutable_features.remove(feat_name)
                     for name in one_hot_feat_names:
                         self._encoded_immutable_features.append(name)
@@ -242,6 +249,12 @@ class DataInterface():
                 return self._encoded_categorical_features
         else:
             return None
+    
+    def get_processed_prot_feats(self) -> list:
+        if self._prot_attr_cat_features is not None:
+            return self._prot_attr_cat_features
+        else:
+            return self._prot_attrs
     
     def get_processed_immutable_feats(self) -> list:
         if self._encoded_immutable_features is not None:

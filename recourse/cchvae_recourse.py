@@ -223,11 +223,8 @@ class CCHVAE():
 
         candidate_dist: List = []
         x_ce: Union[np.ndarray, torch.Tensor] = np.array([])
-        while count <= self._max_iter or len(candidate_dist) <= 0:
+        while True: #count <= self._max_iter or len(candidate_dist) <= 0:
             count = count + counter_step
-            if count > self._max_iter:
-                print("No counterfactual example found")
-                return np.repeat(factual.values, self._k_directions, axis=0)
 
             # STEP 1 -- SAMPLE POINTS on hyper sphere around instance
             latent_neighbourhood, _ = self._hyper_sphere_coordindates(z_rep, high, low)
@@ -281,6 +278,12 @@ class CCHVAE():
                 min_index = np.argsort(candidate_dist)[:self._k_directions]
                 print("Counterfactual examples found")
                 return candidate_counterfactuals[min_index]
+            if int(count) > int(self._max_iter):
+                print("k counterfactual examples not found")
+                min_index = np.argsort(candidate_dist)[:self._k_directions]
+                num_missing_cfs = self._k_directions - len(candidate_dist)
+                filler_missing_cfs = np.repeat(factual.values, num_missing_cfs, axis=0)
+                return np.concatenate((filler_missing_cfs, candidate_counterfactuals[min_index]), axis=0)
 
     def get_counterfactuals(self, poi: pd.DataFrame) -> pd.DataFrame:
         cfs_np = self.counterfactual_search(self._step,poi)
