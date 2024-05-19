@@ -28,6 +28,25 @@ def compute_diversity(poi: pd.DataFrame,cfs: list) -> float:
         return np.nan
     max_norm = 0
     nan_ct = 0
+    ct = 0
+    for i in range(len(cfs)):
+        if cfs[i] is None or cfs[i] is np.nan:
+            nan_ct +=1
+            if nan_ct >= len(cfs) - 1:
+                return np.nan
+        else:
+            for j in range(i, len(cfs)):
+                if not (cfs[j] is None or cfs[j] is np.nan):
+                    total += compute_norm(cfs[i], cfs[j], 2)
+                    ct+=1
+    return total/ct
+
+def compute_proximal_diversity(poi: pd.DataFrame,cfs: list) -> float:
+    total = 0
+    if len(cfs)==0:
+        return np.nan
+    max_norm = 0
+    nan_ct = 0
     for i in range(len(cfs)):
         if cfs[i] is None or cfs[i] is np.nan:
             nan_ct +=1
