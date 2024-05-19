@@ -1,6 +1,5 @@
 import csv
 import enum
-from turtle import color
 import pandas as pd
 from typing import Tuple
 
@@ -15,11 +14,13 @@ import time
 from data.dataset_utils import get_dataset_interface_by_name
 from models.model_utils import get_model_interface_by_name
 from recourse.utils.recourse_utils import get_recourse_interface_by_name
+from misc.results_utils import df_to_latex, df_to_latex_noise
 from joblib import Parallel, delayed
 import torch
 import random
 import pathlib
 import json
+
 
 def run_experiments_trials(arguments: dict) -> Tuple[dict, dict]:
     start_trials = time.time()
@@ -288,169 +289,44 @@ def agg_results_trial_csv(arguments):
     save_results_dict(arguments,recourse_results_trials_dict)
     save_results_dict(arguments,pf_recourse_results_trials_dict,f_name_prefix="partial_failed_")
 
-def df_to_latex(expnam, cols_to_report=["Success", "Avg Success","L2 Distance","Diversity"]):
-    df_li = []
-    datasets = ["creditdefault","givecredit","adultcensus"]
-    base_models = ["LogisticRegressionSK","RandomForestSK","BaselineDNN"]
-    rc = "StEP"
-    
-    max_err= 0
-    csvnames = ["partial_failed_agg_all_trials_results.csv", "partial_failed_agg_all_trials_err.csv"]
-    results = []
-    for csvname in csvnames:
-        df_li = []
-        for i_d, d in enumerate(datasets):
-            df_li_d = []
-            for rc in ["StEP","DiCE","FACE","CCHVAE"]:    
-                df_li_b = []
-                for i,b in enumerate(base_models):
-                    expnam1 = f"results/"+ expnam
-                    df_result = pd.read_csv(expnam1 + f"/{d}/{b}/{rc}/"+csvname)
-                    cols_to_drop = ["poi_id","min_l2_path_len","min_l2_prox","min_l2_path_steps","max_l2_path_len","max_l2_prox","max_l2_path_steps"]
-                    df_new = df_result.copy()
-                    df_new = df_new.drop(columns=cols_to_drop)
-                    df_new = df_new.rename(columns={"pois_with_geq_1_success": "Success", "path_successes": "Avg Success", "l2_prox": "L2 Distance","diversity": "Diversity", "n_neg_samples":"n Samples","l2_path_len": "Path Length","l2_path_steps":"Path Steps"})
-
-                    if rc == "StEP":
-                        df_new["Dataset"] = d
-                    else:
-                        df_new["Dataset"] = None
-                    if i == 0:
-                        df_new["Method"] = rc
-                        df = df_new[["Dataset","Method"]+cols_to_report]
-                    else:
-                        df = df_new[cols_to_report]
-                    df_new["Dataset"] = d
-                    df_new["Method"] = rc
-                    df_new["Model"] = b
-                    df = df_new[["Dataset","Model","Method"]+cols_to_report]
-                    df_li_b.append(df)
-
-                df = pd.concat(df_li_b,ignore_index=True)
-                
-                df_li_d.append(df)
-            df = pd.concat(df_li_d,ignore_index=True)
-            df1 = df.pivot_table(index=["Dataset","Model"], columns = ["Method"], aggfunc='sum', sort = False)
-            
-            df['Dataset'].loc[df['Method'] == "StEP"] = d
-            df_li.append(df)
-        df = pd.concat(df_li,ignore_index=True)
-        
-        #df.to_csv(f'results/10trial_latex_ready.csv',float_format="%.2f",index=False)
-        df1 = df.pivot_table(index=["Dataset","Method"], columns="Model", values = cols_to_report, aggfunc='sum', sort = False)
-        df1 = df1.swaplevel(0, 1, axis=1).sort_index(axis=1)
-        cols = ['LogisticRegressionSK', 'RandomForestSK', 'BaselineDNN']
-        new_cols = df1.columns.reindex(cols, level=0)
-        df1 = df1.reindex(columns=new_cols[0])
-        df1 = df1.reindex(cols_to_report, level=1, axis=1)
-        print(df1.to_latex())
-        print(max_err)
-        results.append(df1)
-    for r in results:
-        print(r.round(decimals=2))
-        print(r.round(decimals=2).to_latex())
-    print((results[1]/results[0]).max(axis=0).round(decimals=4))
-    print((results[1]/results[0]).max(axis=1).round(decimals=4))
-
-def df_to_latex_noise(expnam1,expnam2, cols_to_report=["Success", "Avg Success","L2 Distance","Diversity"]):
-    df_li = []
-    datasets = ["creditdefault","givecredit","adultcensus"]
-    base_models = ["LogisticRegressionSK","RandomForestSK","BaselineDNN"]
-    rc = "StEP"
-    csvnames = ["partial_failed_agg_all_trials_results.csv", "partial_failed_agg_all_trials_err.csv"]
-    results = []
-    for csvname in csvnames:
-        df_li = []
-        for i_d, d in enumerate(datasets):
-            df_li_d = []
-            for noise in [0.0,0.1,0.3,0.5]:
-                noise = round(noise, 1)    
-                df_li_b = []
-                for i,b in enumerate(base_models):
-                    expnam = f"results/"+ expnam1+ str(noise)+expnam2
-                    df_result = pd.read_csv(expnam + f"/{d}/{b}/{rc}/"+csvname)
-                
-                    cols_to_drop = ["poi_id","min_l2_path_len","min_l2_prox","min_l2_path_steps","max_l2_path_len","max_l2_prox","max_l2_path_steps"]
-                    df_new = df_result.copy().drop(columns=cols_to_drop)
-                    df_new = df_new.rename(columns={"pois_with_geq_1_success": "Success", "path_successes": "Avg Success", "l2_prox": "L2 Distance","diversity": "Diversity", "n_neg_samples":"n Samples","l2_path_len": "Path Length","l2_path_steps":"Path Steps"})
-                    
-                    if noise == 0.0:
-                        df_new["Dataset"] = d
-                    else:
-                        df_new["Dataset"] = None
-                    if i == 0:
-                        df_new["Noise"] = noise
-                        df = df_new[["Dataset","Noise"]+cols_to_report]
-                    else:
-                        df = df_new[cols_to_report]
-                    df_new["Dataset"] = d
-                    df_new["Noise"] = noise
-                    df_new["Model"] = b
-                    df = df_new[["Dataset","Model","Noise"]+cols_to_report]
-                    df_li_b.append(df)
-
-                df = pd.concat(df_li_b,ignore_index=True)
-                df_li_d.append(df)
-            df = pd.concat(df_li_d,ignore_index=True)
-            df1 = df.pivot_table(index=["Dataset","Model"], columns = ["Noise"], aggfunc='sum', sort = False)
-            
-            df['Dataset'].loc[df['Noise'] == 0.0] = d
-            df_li.append(df)
-        df = pd.concat(df_li,ignore_index=True)
-        
-        #df.to_csv(f'results/10trial_latex_ready.csv',float_format="%.2f",index=False)
-        print(df)
-        df1 = df.pivot_table(index=["Dataset","Noise"], columns="Model", values = cols_to_report, aggfunc='sum', sort = False)
-        print(df1)
-        df1 = df1.swaplevel(0, 1, axis=1).sort_index(axis=1)
-        cols = ['LogisticRegressionSK', 'RandomForestSK', 'BaselineDNN']
-        new_cols = df1.columns.reindex(cols, level=0)
-        df1 = df1.reindex(columns=new_cols[0])
-        df1 = df1.reindex(cols_to_report, level=1, axis=1)
-        print(df1)
-        print(df1.to_latex())
-        results.append(df1)
-    for r in results:
-        print(r.copy().round(decimals=2))
-        print(r.copy().round(decimals=2).to_latex())
-    print((results[1]/results[0]).max(axis=0).round(decimals=4))
-    print((results[1]/results[0]).max(axis=1).round(decimals=4))
-
-def run_neurips_holistic_experiment(trials=10, n_jobs = 10,k_directions = 3, conf_thres = 0.7):
+def run_neurips_holistic_experiment(recourse_methods_names = ["StEP","DiCE","FACE","CCHVAE"], base_model_names= ["LogisticRegressionSK","RandomForestSK","BaselineDNN"], 
+                                    dataset_names = ["credit default","give credit","adult census"], trials=10, n_jobs = 10,k_directions = 3, conf_thres = 0.7, max_iterations = 50):
     base_models = [{"name": "LogisticRegressionSK", "load model": False, "save model": False},
                    {"name": "RandomForestSK", "load model": False, "save model": False},
                    {"name": "BaselineDNN", "load model": False, "save model": False, "batch_size": 1, "epochs":5,"lr":1e-4}]
     
     datasets = ["credit default","give credit","adult census"]
     
-    recourse_methods = [{"StEP": {'k_directions':k_directions, 'max_iterations':50, 'confidence_threshold':conf_thres,
+    recourse_methods = [{"StEP": {'k_directions':k_directions, 'max_iterations':max_iterations, 'confidence_threshold':conf_thres,
                     'directions_rescaler': "constant step size", 'step_size': 1.0, 'noise':0.0}},
           {"DiCE": {'k_directions':k_directions, 'backend':'sklearn', 'confidence_threshold':conf_thres}},
           {"FACE": {'k_directions':k_directions, 'direction_threshold':3.0, 'confidence_threshold':conf_thres,
-                    'weight_bias':2.024,'max_iterations':50}},
-          {"CCHVAE": {'k_directions':k_directions, 'confidence_threshold':conf_thres, 'max_iterations':50,'train vae': True}}
+                    'weight_bias':2.024,'max_iterations':max_iterations}},
+          {"CCHVAE": {'k_directions':k_directions, 'confidence_threshold':conf_thres, 'max_iterations':max_iterations,'train vae': True}}
           ]
     
     for b in base_models:
         for d in datasets:
             for rc in recourse_methods:
-                expnam = f"{trials}trials_{k_directions}Clust_{str(conf_thres)}ConfThres_newdiv"
-                arguments = {
-                    "n jobs": trials,
-                    "trials": n_jobs,
-                    "dataset name": d,
-                    "dataset encoded": "OneHot",
-                    "dataset scaler": "Standard",
-                    "dataset valid-test split": [0.15, 0.15],
-                    "base model": b,
-                    "recourse methods": rc,
-                    "save results": True,
-                    "save experiment": True,
-                    "experiment name": expnam
-                }
-                run_experiments_trials(arguments)
+                if b['name'].lower() in base_model_names and d in dataset_names and list(rc.keys())[0].lower() in recourse_methods_names:
+                    expnam = f"{trials}trials_{k_directions}Clust_{str(conf_thres)}ConfThres_newdiv"
+                    arguments = {
+                        "n jobs": trials,
+                        "trials": n_jobs,
+                        "dataset name": d,
+                        "dataset encoded": "OneHot",
+                        "dataset scaler": "Standard",
+                        "dataset valid-test split": [0.15, 0.15],
+                        "base model": b,
+                        "recourse methods": rc,
+                        "save results": True,
+                        "save experiment": True,
+                        "experiment name": expnam
+                    }
+                    run_experiments_trials(arguments)
 
-def run_neurips_noise_experiment(trials=10, n_jobs = 10, k_directions = 3, conf_thres = 0.7, noise_range = np.arange(0.0, 0.6, 0.1)):
+def run_neurips_noise_experiment(base_model_names= ["LogisticRegressionSK","RandomForestSK","BaselineDNN"], dataset_names = ["credit default","give credit","adult census"],
+                                 trials=10, n_jobs = 10, k_directions = 3, conf_thres = 0.7, noise_range = np.arange(0.0, 0.6, 0.1), max_iterations = 50):
     base_models = [{"name": "LogisticRegressionSK", "load model": False, "save model": False},
                    {"name": "RandomForestSK", "load model": False, "save model": False},
                    {"name": "BaselineDNN", "load model": False, "save model": False, "batch_size": 1, "epochs":5,"lr":1e-4}]
@@ -458,25 +334,84 @@ def run_neurips_noise_experiment(trials=10, n_jobs = 10, k_directions = 3, conf_
     datasets = ["credit default","give credit","adult census"]
     for b in base_models:
         for d in datasets:
-            for noise in noise_range:
-                noise = round(noise, 1)
-                expnam = f"{trials}trials_{k_directions}Clust_{str(conf_thres)}ConfThres_{str(noise)}noise"
-                arguments = {
-                    "n jobs": trials,
-                    "trials": n_jobs,
-                    "dataset name": d,
-                    "dataset encoded": "OneHot",
-                    "dataset scaler": "Standard",
-                    "dataset valid-test split": [0.15, 0.15],
-                    "base model": b,
-                    "recourse methods": {"StEP": {'k_directions':k_directions, 'max_iterations':50, 'confidence_threshold':conf_thres,
-                                        'directions_rescaler': "constant step size", 'step_size': 1.0, 'noise':noise}},
-                    "save results": True,
-                    "save experiment": True,
-                    "experiment name": expnam
-                }
-                all_results = run_experiments_trials(arguments)                    
+            if b['name'].lower() in base_model_names and d in dataset_names:
+                for noise in noise_range:
+                    noise = round(noise, 1)
+                    expnam = f"{trials}trials_{k_directions}Clust_{str(conf_thres)}ConfThres_{str(noise)}noise"
+                    arguments = {
+                        "n jobs": trials,
+                        "trials": n_jobs,
+                        "dataset name": d,
+                        "dataset encoded": "OneHot",
+                        "dataset scaler": "Standard",
+                        "dataset valid-test split": [0.15, 0.15],
+                        "base model": b,
+                        "recourse methods": {"StEP": {'k_directions':k_directions, 'max_iterations':max_iterations, 'confidence_threshold':conf_thres,
+                                            'directions_rescaler': "constant step size", 'step_size': 1.0, 'noise':noise}},
+                        "save results": True,
+                        "save experiment": True,
+                        "experiment name": expnam
+                    }
+                    all_results = run_experiments_trials(arguments)                    
 
+def user_input(base_lst):
+    lst = []
+    base_lst = [x.lower() for x in base_lst]
+    while True:
+        ele = str(input())
+        if ele.lower() in base_lst:
+            lst.append(ele)
+            if len(lst) == len(base_lst):
+                return lst
+        elif ele == "" or ele ==" ":
+            break 
+        else:
+            print("Input not in ", base_lst)
+    
+    return lst
+
+def holistic_experiment_user_input(noise_experiment = False):
+    base_model_names= ["LogisticRegressionSK","RandomForestSK","BaselineDNN"]
+    dataset_names = ["credit default","give credit","adult census"]
+    recourse_methods_names = ["StEP","DiCE","FACE","CCHVAE"]
+    print()
+    print("------------------------------")
+    if not noise_experiment:
+        print("Type in recouse method names from " + str(recourse_methods_names))
+        print("Leave input empty and press enter to stop.")
+        recourse_to_test = user_input(recourse_methods_names)
+        if len(recourse_to_test) == 0:
+            print("No inputs given, ending.")
+            return
+
+    print()
+    print("Type in dataset method names from " + str(dataset_names))
+    print("Leave input empty and press enter to stop.")
+    datasets_to_test = user_input(dataset_names)
+    if len(datasets_to_test) == 0:
+        print("No inputs given, ending.")
+        return
+
+    print()
+    print("Type in base model names from " + str(base_model_names))
+    print("Leave input empty and press enter to stop.")
+    models_to_test = user_input(base_model_names)
+    if len(models_to_test) == 0:
+        print("No inputs given, ending.")
+        return
+
+    trials=int(input("Enter number of trials (n>0): ")) 
+    n_jobs = int(input("Enter number of jobs(processes) (n>0): ")) 
+    k_directions = int(input("Enter number of recourse paths (k>0): ")) 
+    conf_thres = float(input("Enter confidence threshold (0<t<1): ")) 
+    max_iterations = int(input("Enter max iterations (n>0): "))
+    
+    if noise_experiment:
+        run_neurips_noise_experiment(base_model_names=models_to_test, dataset_names=datasets_to_test,
+                                        trials=trials, n_jobs=n_jobs, k_directions=k_directions, conf_thres=conf_thres, max_iterations=max_iterations)
+    else:
+        run_neurips_holistic_experiment(recourse_methods_names=recourse_to_test, base_model_names=models_to_test, dataset_names=datasets_to_test,
+                                        trials=trials, n_jobs=n_jobs, k_directions=k_directions, conf_thres=conf_thres, max_iterations=max_iterations)
 if __name__ == "__main__":
     # argument = your dict
     # TODO: give names for util files that can go in here
@@ -504,207 +439,19 @@ if __name__ == "__main__":
                 'directions_rescaler': "constant step size", 'step_size': 1.0}}
             for your recourse methods.
     """
-    #df_to_latex("succ10trials_3Clust_0.7ConfThres_newdiv")
-    #df_to_latex_noise("succ10trials_3Clust_0.7ConfThres_", "noise")
-    df_to_latex("succ10trials_3Clust_0.7ConfThres_newdiv",cols_to_report=["Success", "Path Length","Path Steps","Diversity"])
-    #df_to_latex_noise("succ10trials_3Clust_0.7ConfThres_", "noise_newdiv",cols_to_report=["Success", "Path Length","Path Steps","Diversity"])
-    
-    """df_li = []
-    for k in range(3,4):
-        for step_size in [0.1, 0.25, 0.5, 0.75, 1.0]:
-            for conf_thres in [0.5, 0.55, 0.6, 0.65, 0.7]:
-                for t in range(100):
-                    expnam = f"results/results/100trials_{k}Clust_{str(step_size)}StepSize_{str(conf_thres)}ConfThres"
-                    fname = f"/adultcensus/LogisticRegressionSK/StEP/trials/paths_trial_{t}.csv"
-                    csv_loc = expnam+fname
-                    df = pd.read_csv(csv_loc)
-                    cols = df.columns.tolist()
-                    cols = cols[-4:]
-                    df = df[cols]
-                    df['k'] = k
-                    df['step_size'] = step_size
-                    df['conf_thres'] = conf_thres
-                    df_li.append(df)
-    df = pd.concat(df_li,ignore_index=True)
-    df = df.groupby(['k','step_size','conf_thres','poi_index','path_num'])['failure'].min().reset_index()
-    print(df)
-    df = df.groupby(['k','step_size','conf_thres','poi_index'])['failure'].mean().reset_index()
-    print(df)
-    df.to_csv('results/100trial_adult_avg_fails_per_poi.csv')
-    df = df.groupby(['k','step_size','conf_thres'])['failure'].mean().reset_index()
-    print(df)
-    df.to_csv('results/100trial_adult_avg_fails_per_poi_agg.csv')  """
-    
-    """import matplotlib.pyplot as plt
-    import seaborn as sns
-    df = pd.read_csv('results/100trial_adult_avg_fails_per_poi_agg.csv')
-    print(df)
-    df['conf_thres'] = df['conf_thres'].astype(str)
-    df['step_size'] = df['step_size'].astype(str)
-    ax = sns.barplot(data=df, x='conf_thres', y='failure', hue='step_size', palette=sns.color_palette("tab10"), alpha=0.7)
-    ax.set(xlabel='Conf Threshold', ylabel='Failed Paths per POI')
-    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1))
-    plt.savefig("results/failsbar.pdf",bbox_inches='tight')"""
-    
-    """results_li = []
-    for t in range(100):
-        for conf_thres in [0.5,0.55,0.60,0.65,0.70]:
-            df_li = []
-            for k in range(3,4):
-                for step_size in [0.25,0.5,0.75]:
-                    
-                        expnam = f"results/results/100trials_{k}Clust_{str(step_size)}StepSize_{str(conf_thres)}ConfThres"
-                        fname = f"/adultcensus/LogisticRegressionSK/StEP/trials/paths_trial_{t}.csv"
-                        csv_loc = expnam+fname
-                        df = pd.read_csv(csv_loc)
-                        cols = df.columns.tolist()
-                        cols = cols[-4:]
-                        df = df[cols]
-                        df['k'] = k
-                        df['step_size'] = step_size
-                        df['conf_thres'] = conf_thres
-                        df_li.append(df)
-            df = pd.concat(df_li,ignore_index=True)
-            df = df.groupby(['k','step_size','conf_thres','poi_index'])['failure'].max().reset_index()
-            print(df)
-            df = df.groupby(['poi_index'])['failure'].mean().reset_index(name='shared_index')#value_counts().rename("num_shared_exper_result").reset_index()
-            print(df)
-            print(df['shared_index'].value_counts())
-            df = df['shared_index'].value_counts().reset_index()
-            results_li.append(df)
-            
-    #df.to_csv('results/agg_step_poi_shared_fails.csv')
-    df = pd.concat(results_li,ignore_index=True)
-    df = df.groupby(['index'])['shared_index'].mean().reset_index()
-    df.rename(columns={"index": "avg_result","shared_index": "count"}, inplace= True)
-    print(df)
-    df.to_csv('results/agg_step_poi_shared_fails.csv')"""
-
-
-    """expnam = f"results/succ10trials_3Clust_0.7ConfThres"
-    fname = f"/givecredit/LogisticRegressionSK/CCHVAE/trials/paths_trial_0.csv"
-    csv_loc = expnam+fname
-    df = pd.read_csv(csv_loc)
-    cols = df.columns.tolist()
-    #cols = cols[-4:]
-    df = df[cols]
-    df = df.drop(columns=["path_order","path_num"])
-    print(df["failure"].value_counts()/6)
-    df0 = df.copy().loc[df["failure"] == 0]
-    df1 = df.copy().loc[df["failure"] == 1]
-    df0 = df0.groupby(['poi_index']).mean().reset_index()
-    df1 = df1.groupby(['poi_index']).mean().reset_index()
-    print(df1)
-    data_interface = get_dataset_interface_by_name("give credit")
-    data_interface.encode_data()
-    
-    feats_train, feats_valid, feats_test, labels_train, labels_valid, labels_test = data_interface.split_data(.15, .15, random_state=0)
-    print(df0["poi_index"].values)
-    print(feats_test[feats_test.index.isin(df0["poi_index"].values)])
-    df0_log = feats_test.copy()[feats_test.index.isin(df0["poi_index"].values)]
-    df1_log = feats_test.copy()[feats_test.index.isin(df1["poi_index"].values)]
-    dfall_log = feats_test.copy()[feats_test.index.isin(np.concatenate((df0["poi_index"].values, df1["poi_index"].values), axis=None))]
-
-    with pd.option_context('display.max_columns', 2000):
-        print("Feats success poi")
-        print(df0_log.describe().round(2))
-        print("-----------------------")
-        print("Feats failed poi")
-        print(df1_log.describe().round(2))
-        print("-----------------------")
-        print("Feats diff succes-failed poi")
-        print(df0_log.describe().round(2)-df1_log.describe().round(2))
-
-    fname = f"/givecredit/RandomForestSK/CCHVAE/trials/paths_trial_0.csv"
-    csv_loc = expnam+fname
-    df = pd.read_csv(csv_loc)
-    cols = df.columns.tolist()
-    #cols = cols[-4:]
-    df = df[cols]
-    df = df.drop(columns=["path_order","path_num"])
-    df0 = df.copy()
-    df0 = df0.groupby(['poi_index']).mean().reset_index()
-    data_interface = get_dataset_interface_by_name("give credit")
-    data_interface.encode_data()
-    
-    
-    feats_train, feats_valid, feats_test, labels_train, labels_valid, labels_test = data_interface.split_data(.15, .15, random_state=0)
-    df0 = feats_test.copy()[feats_test.index.isin(df0["poi_index"].values)]
-    with pd.option_context('display.max_columns', 2000):
-        
-        print(df0.describe().round(2))
-        print("-----------------------")
-        print("Feats succes poi")
-        print(dfall_log.describe().round(2))
-        print("-----------------------")
-        print(df0.describe().round(2)-dfall_log.describe().round(2))
-        
-    
-    data_interface = get_dataset_interface_by_name("give credit")
-    data_interface.encode_data()
-    data_interface.scale_data("Standard")
-    feats_train, feats_valid, feats_test, labels_train, labels_valid, labels_test = data_interface.split_data(.15, .15, random_state=0)
-    model_args = {"name": "LogisticRegressionSK", "load model": False, "save model": False}
-    model_args["feats_train"], model_args["feats_valid"], model_args["labels_valid"] = feats_train, feats_valid, labels_valid
-    model_args['random seed'] = 0 
-    model_interface = get_model_interface_by_name(**model_args) 
-    model_interface.fit(feats_train, labels_train)
-    preds = pd.Series(model_interface.predict(
-        feats_test), index=feats_test.index)
-    probs_log = pd.Series(model_interface.predict_proba(
-        feats_test,pos_label_only=True).flatten(), index=feats_test.index)
-    feats_pos_log = feats_test.copy()[feats_test.index.isin(probs_log[probs_log>=0.7].index)]
-    feats_neg_log = feats_test.copy()[feats_test.index.isin(probs_log[probs_log<0.5].index)]
-    
-    model_args = {"name": "RandomForestSK", "load model": False, "save model": False}
-    model_args["feats_train"], model_args["feats_valid"], model_args["labels_valid"] = feats_train, feats_valid, labels_valid
-    model_args['random seed'] = 0 
-    model_interface = get_model_interface_by_name(**model_args) 
-    model_interface.fit(feats_train, labels_train)
-    preds = pd.Series(model_interface.predict(
-        feats_test), index=feats_test.index)
-    probs_rand = pd.Series(model_interface.predict_proba(
-        feats_test,pos_label_only=True).flatten(), index=feats_test.index)
-    feats_pos_rand = feats_test.copy()[feats_test.index.isin(probs_rand[probs_rand>=0.7].index)]
-    scaler = data_interface.get_scaler()
-    cols_to_scale = data_interface.get_scaled_features()
-    scaled_feats_pos_log = feats_pos_log.copy()[cols_to_scale]
-    scaled_feats_pos_log[cols_to_scale] = scaler.inverse_transform(
-        scaled_feats_pos_log)
-    scaled_feats_pos_rand = feats_pos_rand.copy()[cols_to_scale]
-    scaled_feats_pos_rand[cols_to_scale] = scaler.inverse_transform(
-        scaled_feats_pos_rand)
-    feats_neg_log = feats_neg_log.copy()[cols_to_scale]
-    feats_neg_log[cols_to_scale] = scaler.inverse_transform(
-        feats_neg_log)
-    
-    with pd.option_context('display.max_columns', 2000):
-        print("Unscaled Feats with logreg prob >= .7")
-        print(scaled_feats_pos_log.describe().round(2))
-        print("-----------------------")
-        print("Unscaled Feats with randforest prob >= .7")
-        print(scaled_feats_pos_rand.describe().round(2))
-        print("-----------------------")
-        print("Unscaled Feats difference log-rand")
-        print(scaled_feats_pos_log.describe().round(2)-scaled_feats_pos_rand.describe().round(2))
-        print("-----------------------")
-        print("Scaled Feats difference log-rand")
-        print(feats_pos_log.describe().round(2)-feats_pos_rand.describe().round(2))
-
+    print("----------------------------------")
+    print("Conductucting Holistic Experiment")
+    holistic_experiment_user_input()
     print()
-    print("Log vs Rand Pos probs >= 0.7")
-    print("log >= 0.7", len(probs_log[probs_log>=0.7]))
-    print("log >= 0.5", len(probs_log[probs_log>=0.5]))
-    print(len(probs_log[probs_log>=0.7])/len(probs_log[probs_log>=0.5]))
-    print("rand >= 0.7", len(probs_rand[probs_rand>=0.7]))
-    print("rand >= 0.5", len(probs_rand[probs_rand>=0.5]))
-    print(len(probs_rand[probs_rand>=0.7])/len(probs_rand[probs_rand>=0.5]))
-
-    print(probs_log[probs_log<0.5])
-    print(probs_rand[probs_rand<0.5])
+    print("----------------------------------")
+    print("Conductucting StEP Noise Experiment")
+    holistic_experiment_user_input(noise_experiment=True)
     
-    print(scaled_feats_pos_log["age"].quantile(np.linspace(.01, 1, 99, 0)))
-    print(scaled_feats_pos_log["age"][scaled_feats_pos_log["age"]>=50])
-    print(len(scaled_feats_pos_log["age"][scaled_feats_pos_log["age"]>=59])/len(scaled_feats_pos_log))
-    print(len(feats_neg_log["age"][feats_neg_log["age"]<59])/len(feats_neg_log))"""    
+    #normal diversity folders
+    #df_to_latex("succ10trials_3Clust_0.7ConfThres")
+    #df_to_latex_noise("succ10trials_3Clust_0.7ConfThres_", "noise")
+
+    #prox diversity folders
+    #df_to_latex("succ10trials_3Clust_0.7ConfThres_newdiv",cols_to_report=["Success", "Path Length","Path Steps","Diversity"])
+    #df_to_latex_noise("succ10trials_3Clust_0.7ConfThres_", "noise_newdiv",cols_to_report=["Success", "Path Length","Path Steps","Diversity"])
     

@@ -94,14 +94,9 @@ class VariationalAutoencoder(nn.Module):
         z = self.__reparametrization_trick(mu_z, log_var_z)
         # concatenate the immutable part to the latents and decode both
         z = torch.cat([z, x_immutable], dim=-1)
-        #print(z)
-        #print("zzzzzzzzzzzzzzzzzzz")
         recon = self.decode(z)
-        #print(recon)
         # add the immutable features to the reconstruction
         x[:, self.mutable_mask] = recon
-        #print("TEASTRASTAS")
-        #print(x)
         return x, mu_z, log_var_z
 
     def predict(self, data):
